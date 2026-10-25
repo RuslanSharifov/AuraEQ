@@ -109,11 +109,12 @@ class AuraApplication : Application() {
     /** Single entrypoint for both manifest and live Spotify session broadcasts. */
     @Synchronized
     fun handleAudioSessionIntent(intent: Intent?) {
-        val sessionId = intent?.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION, -1) ?: -1
+        val message = intent ?: return
+        val sessionId = message.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION, -1)
         if (sessionId <= 0) return
-        when (intent.action) {
+        when (message.action) {
             AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION -> {
-                val packageName = intent.getStringExtra(AudioEffect.EXTRA_PACKAGE_NAME)
+                val packageName = message.getStringExtra(AudioEffect.EXTRA_PACKAGE_NAME)
                 // Repeated broadcasts may arrive through both registered receivers.
                 audioEffectManager.attachSession(sessionId, packageName)
                 onAudioSessionOpened(sessionId, packageName)
