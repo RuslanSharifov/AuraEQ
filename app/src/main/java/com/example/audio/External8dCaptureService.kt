@@ -1,6 +1,8 @@
 package com.example.audio
 
 import android.Manifest
+import android.annotation.SuppressLint
+import androidx.annotation.RequiresApi
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -154,7 +156,15 @@ class External8dCaptureService : Service() {
         return START_NOT_STICKY
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
+    @SuppressLint("MissingPermission")
     private fun startPipeline(token: MediaProjection) {
+        // Called only after RECORD_AUDIO was explicitly granted and checked
+        // in onStartCommand. Revocation is handled by catch/finally in the worker.
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED) {
+            throw SecurityException("RECORD_AUDIO revoked before capture initialization")
+        }
         val rate = 48000
         val mask = AudioFormat.CHANNEL_IN_STEREO
         val format = AudioFormat.Builder()
