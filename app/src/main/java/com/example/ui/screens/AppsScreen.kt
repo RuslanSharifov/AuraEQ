@@ -135,9 +135,12 @@ fun AppsScreen(
         ) {
             items(filteredApps, key = { it.packageName }) { app ->
                 val allPresets = state.factoryPresets + state.customPresets
-                val assignedPresetName = allPresets.find { it.id == app.presetId }?.name ?: "Flat"
+                val assignedPresetName = if (app.useCustomPreset)
+                    allPresets.find { it.id == app.presetId }?.name ?: stringResource(R.string.app_global_eq)
+                    else stringResource(R.string.app_global_eq)
                 val isSessionActive = state.activeAppSessions.contains(app.packageName)
-                val isEffectConnected = state.isEnabled && state.connectedAppPackages.contains(app.packageName)
+                val isEffectConnected = app.isEnabled && state.isEnabled &&
+                    state.connectedAppPackages.contains(app.packageName)
 
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -196,8 +199,10 @@ fun AppsScreen(
                                 }
                             }
 
-                            // Enable Switch
+                            // Enabled = follow global/per-app preset; disabled = bypass ALL
+                            // native AuraEQ effects for this particular app.
                             Switch(
+                                modifier = Modifier.testTag("app_eq_enabled_${app.packageName}"),
                                 checked = app.isEnabled,
                                 onCheckedChange = { checked ->
                                     viewModel.toggleAppProfile(app.packageName, checked)
@@ -210,6 +215,16 @@ fun AppsScreen(
                             )
                         }
 
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(
+                                if (app.isEnabled) R.string.app_eq_applies else R.string.app_eq_excluded
+                            ),
+                            fontSize = 11.sp,
+                            color = if (app.isEnabled) MaterialTheme.colorScheme.onSurfaceVariant
+                                else AuraAmberWarning,
+                            modifier = Modifier.testTag("app_eq_policy_${app.packageName}")
+                        )
                         Spacer(modifier = Modifier.height(10.dp))
 
                         // Preset Selector Pill & Status
@@ -336,8 +351,23 @@ fun AppsScreen(
             text = {
                 val allPresets = state.factoryPresets + state.customPresets
                 Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.app_global_eq),
+                        fontSize = 14.sp,
+                        color = if (!app.useCustomPreset) AuraAccent
+                            else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("app_preset_global")
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                viewModel.useGlobalAppPreset(app.packageName)
+                                selectedAppForPreset = null
+                            }
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    )
                     allPresets.forEach { preset ->
-                        val isSelected = app.presetId == preset.id
+                        val isSelected = app.useCustomPreset && app.presetId == preset.id
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
