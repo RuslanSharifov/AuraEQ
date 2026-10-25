@@ -151,4 +151,13 @@
     <string name="app_eq_excluded">Excluded: AuraEQ effects disabled for this app</string>
     <string name="app_eq_platform_notice">Android allows EQ, Bass and Virtualizer only for sessions exposed by the player. Full moving left-right 8D cannot be applied to Spotify or all apps without system-level audio access.</string>
     <string name="virtualizer_device_note">3D stereo widening also works on mono audio in the AuraEQ player. In Spotify and other apps, 3D depends on the audio session and headphone virtualization supported by your device.</string>
+
+    <string name="external_8d_title">External apps · 8D capture (experimental)</string>
+    <string name="external_8d_disclaimer">Only media and games allowing Android playback capture can be captured; Spotify/YouTube often block capture. ORIGINAL AUDIO IS NOT MUTED. Original and processed audio may play together, with echo and latency. Test on headphones at low volume. No recordings are saved.</string>
+    <string name="external_8d_unsupported">Android 10+ is required. Built-in player 8D still works.</string>
+    <string name="external_8d_running">Capture active · permitted streams are being processed (source is not muted)</string>
+    <string name="external_8d_error">Capture failed or stopped. Check consent, permissions and the source capture policy.</string>
+    <string name="external_8d_stopped">Capture is stopped</string>
+    <string name="external_8d_start">Grant permission and start 8D capture</string>
+    <string name="external_8d_stop">Stop capture</string>
 </resources>
