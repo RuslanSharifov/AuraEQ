@@ -371,6 +371,13 @@ fun EqualizerScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.virtualizer_device_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 6.dp)
+        )
         Spacer(modifier = Modifier.height(16.dp))
 
         // Real per-ear PCM control for the built-in player.
