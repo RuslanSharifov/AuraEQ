@@ -12,6 +12,12 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.APP_MUSIC" />
         </intent>
+        <!-- Discover user-launchable applications for optional EQ exclusions,
+             without requesting broad QUERY_ALL_PACKAGES access. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <intent>
             <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
         </intent>
