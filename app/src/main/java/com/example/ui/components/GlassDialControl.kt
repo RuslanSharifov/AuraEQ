@@ -5,7 +5,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -65,6 +68,10 @@ fun GlassDialControl(
 
     val range = (maxValue - minValue).toFloat()
     val fraction = ((value - minValue) / range).coerceIn(0f, 1f)
+    val updatedFraction by rememberUpdatedState(fraction)
+    val updatedValue by rememberUpdatedState(value)
+    val updatedOnValueChange by rememberUpdatedState(onValueChange)
+    val updatedHaptics by rememberUpdatedState(hapticEnabled)
 
     val animatedFraction by animateFloatAsState(
         targetValue = if (isEnabled) fraction else 0f,
@@ -109,15 +116,24 @@ fun GlassDialControl(
                     .size(90.dp)
                     .pointerInput(isEnabled, minValue, maxValue) {
                         if (!isEnabled) return@pointerInput
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            val deltaFraction = -dragAmount.y / 200f
-                            val newFrac = (fraction + deltaFraction).coerceIn(0f, 1f)
-                            val newVal = (minValue + newFrac * range).roundToInt()
-                            if (newVal != value) {
-                                onValueChange(newVal)
-                                if (hapticEnabled && newVal % 100 == 0) {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            down.consume()
+                            // Accumulate each delta across this single gesture, instead of
+                            // repeatedly adding it to a stale composition-time fraction.
+                            var dragFraction = updatedFraction
+                            var lastSent = updatedValue
+                            drag(down.id) { change ->
+                                val delta = -change.positionChange().y / 200f
+                                change.consume()
+                                dragFraction = (dragFraction + delta).coerceIn(0f, 1f)
+                                val next = (minValue + dragFraction * range).roundToInt()
+                                if (next != lastSent) {
+                                    lastSent = next
+                                    updatedOnValueChange(next)
+                                    if (updatedHaptics && next % 100 == 0) {
+                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    }
                                 }
                             }
                         }
