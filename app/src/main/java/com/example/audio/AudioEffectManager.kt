@@ -163,10 +163,12 @@ class AudioEffectManager(private val context: Context) {
     private val audioDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
             detectAudioRoute()
+            refreshActiveSessions()
         }
 
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
             detectAudioRoute()
+            refreshActiveSessions()
         }
     }
 
@@ -345,7 +347,7 @@ class AudioEffectManager(private val context: Context) {
                 if (virt.strengthSupported) {
                     virt.setStrength(virtualizerStrength)
                 }
-                virt.enabled = isEnabled
+                virt.enabled = false
                 sessionEffects.virtualizer = virt
             }
         } catch (e: Exception) {
@@ -436,16 +438,43 @@ class AudioEffectManager(private val context: Context) {
     fun setVirtualizer(strength: Int) {
         this.virtualizerStrength = strength.coerceIn(0, 1000).toShort()
         activeEffectSessions.values.forEach { session ->
-            if (presetForSession(session.sessionId) == null) {
-                try {
-                    session.virtualizer?.let { effect ->
-                        if (effect.strengthSupported) effect.setStrength(virtualizerStrength)
-                        effect.enabled = isEnabled && virtualizerStrength > 0
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Unable to change virtualizer on session ${session.sessionId}", e)
+            val currentStrength = (presetForSession(session.sessionId)?.virtualizer
+                ?: virtualizerStrength.toInt()).coerceIn(0, 1000).toShort()
+            applyVirtualizationToSession(session, currentStrength)
+        }
+    }
+
+    /**
+     * Use the OEM binaural mode for headphones when supported. Some devices
+     * expose Virtualizer but no strength control or no compatible virtualizer:
+     * that cannot be fixed by increasing the slider and is not reported as 3D.
+     *
+     * Our Media3 player already has a deterministic PCM widening processor,
+     * so avoid stacking the OEM effect on that same self-owned session.
+     */
+    private fun applyVirtualizationToSession(session: SessionEffects, strength: Short) {
+        try {
+            session.virtualizer?.let { virt ->
+                if (knownSessionPackages[session.sessionId] == context.packageName ||
+                    !isEnabled || strength <= 0
+                ) {
+                    virt.enabled = false
+                    return@let
                 }
+                if (virt.strengthSupported) virt.setStrength(strength)
+                val isHeadphone = _currentDeviceType.value in setOf(
+                    AudioDeviceType.WIRED, AudioDeviceType.BLUETOOTH, AudioDeviceType.USB
+                )
+                val requestedMode = if (isHeadphone)
+                    Virtualizer.VIRTUALIZATION_MODE_BINAURAL
+                else Virtualizer.VIRTUALIZATION_MODE_AUTO
+                // A failed request is normal on devices with fixed DSP routing.
+                runCatching { virt.forceVirtualizationMode(requestedMode) }
+                virt.enabled = true
+                Log.d(TAG, "3D session=${session.sessionId} mode=${virt.virtualizationMode} strength=${strength}")
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to enable 3D effect on session ${session.sessionId}", e)
         }
     }
 
@@ -490,10 +519,7 @@ class AudioEffectManager(private val context: Context) {
                 if (bb.strengthSupported) bb.setStrength(currentBass)
                 bb.enabled = isEnabled && currentBass > 0
             }
-            session.virtualizer?.let { virt ->
-                if (virt.strengthSupported) virt.setStrength(currentVirtualizer)
-                virt.enabled = isEnabled && currentVirtualizer > 0
-            }
+            applyVirtualizationToSession(session, currentVirtualizer)
         } catch (e: Exception) {
             Log.w(TAG, "Error applying current params to session ${session.sessionId}", e)
         }
