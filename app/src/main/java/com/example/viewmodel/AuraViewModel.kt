@@ -560,6 +560,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                                 appName = label.ifBlank { defaultLabel },
                                 presetId = saved?.presetId ?: "flat",
                                 isEnabled = saved?.isEnabled ?: true,
+                                useCustomPreset = saved?.useCustomPreset ?: false,
                                 isSessionActive = isSessionActive
                             )
                         )
