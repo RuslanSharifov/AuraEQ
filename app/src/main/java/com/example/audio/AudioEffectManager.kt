@@ -93,10 +93,11 @@ class AudioEffectManager(private val context: Context) {
     init {
         detectAudioRoute()
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
-        probeHardwareCapabilities()
+        // Do not probe deprecated global session 0; await a valid playback session.
     }
 
-    fun probeHardwareCapabilities(sampleSessionId: Int = 0) {
+    fun probeHardwareCapabilities(sampleSessionId: Int) {
+        if (sampleSessionId <= 0) return
         try {
             // Test with session 0 or sample session
             val testEq = Equalizer(0, sampleSessionId)
@@ -162,12 +163,12 @@ class AudioEffectManager(private val context: Context) {
             )
             _hardwareBands.value = fallbackBands
             _capabilities.value = AudioEngineCapabilities(
-                isHardwareEqualizerSupported = true,
+                isHardwareEqualizerSupported = false,
                 numberOfBands = 5,
                 minGainMilliBel = -1500,
                 maxGainMilliBel = 1500,
-                isBassBoostSupported = true,
-                isVirtualizerSupported = true
+                isBassBoostSupported = false,
+                isVirtualizerSupported = false
             )
         }
     }
@@ -177,7 +178,7 @@ class AudioEffectManager(private val context: Context) {
      */
     @Synchronized
     fun attachSession(sessionId: Int, packageName: String? = null) {
-        if (sessionId < 0) return
+        if (sessionId <= 0) return
         Log.i(TAG, "Attaching audio effects to session: $sessionId (pkg=$packageName)")
 
         val sessionEffects = activeEffectSessions.getOrPut(sessionId) {
@@ -224,7 +225,15 @@ class AudioEffectManager(private val context: Context) {
             Log.w(TAG, "Failed to create Virtualizer for session $sessionId: ${e.message}")
         }
 
-        applyCurrentParametersToSession(sessionEffects)
+        if (sessionEffects.equalizer == null &&
+            sessionEffects.bassBoost == null &&
+            sessionEffects.virtualizer == null
+        ) {
+            // No audio effect attached. Do not report the session as processing.
+            activeEffectSessions.remove(sessionId)
+        } else {
+            applyCurrentParametersToSession(sessionEffects)
+        }
         _activeSessions.value = activeEffectSessions.keys.toSet()
     }
 
