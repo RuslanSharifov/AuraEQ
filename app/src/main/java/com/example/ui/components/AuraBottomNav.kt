@@ -105,7 +105,7 @@ fun AuraBottomNav(
                     spotColor = Color(0x408274F5)
                 )
                 .hazeGlass(
-                    input = HazeInput.Sources(hazeState),
+                    input = HazeInput.Backdrop(hazeState),
                     style = glassStyle
                 )
                 .clip(shape)
