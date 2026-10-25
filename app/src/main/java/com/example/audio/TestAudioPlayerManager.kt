@@ -47,8 +47,11 @@ class TestAudioPlayerManager(
     private val _state = MutableStateFlow(TestPlayerState())
     val state: StateFlow<TestPlayerState> = _state.asStateFlow()
 
-    init {
-        initPlayer()
+    // Do not initialize ExoPlayer or synthesize a test track when the app first opens.
+    // Some OEM audio stacks fail at eager session creation, even when the user never plays audio.
+    private fun ensurePlayer(): ExoPlayer? {
+        if (exoPlayer == null) initPlayer()
+        return exoPlayer
     }
 
     @OptIn(UnstableApi::class)
@@ -82,27 +85,20 @@ class TestAudioPlayerManager(
                 })
             }
 
-            // Synthesizing 441,000 samples can stall startup: perform file generation off the UI thread.
-            scope.launch {
-                val sampleFile = withContext(Dispatchers.IO) { getOrCreateReferenceWav() }
-                val player = exoPlayer ?: return@launch
-                player.setMediaItem(MediaItem.fromUri(Uri.fromFile(sampleFile)))
-                player.prepare()
-
-                val sessionId = player.audioSessionId
-                _state.value = _state.value.copy(
-                    audioSessionId = sessionId,
-                    currentTitle = "Harmonic Reference Track"
-                )
-                if (sessionId > 0) onSessionReady(sessionId)
-            }
+            // No media is loaded until Play, Reference Signal, or Pick File is used.
+            // This keeps startup independent of Media3 and device-specific audio effects.
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing ExoPlayer: ${e.message}", e)
         }
     }
 
     fun play() {
-        exoPlayer?.play()
+        val player = ensurePlayer() ?: return
+        if (player.mediaItemCount == 0) {
+            loadReferenceTrack()
+        } else {
+            player.play()
+        }
     }
 
     fun pause() {
@@ -125,11 +121,12 @@ class TestAudioPlayerManager(
     fun playCustomUri(uri: Uri, fileName: String) {
         try {
             val mediaItem = MediaItem.fromUri(uri)
-            exoPlayer?.stop()
-            exoPlayer?.setMediaItem(mediaItem)
-            exoPlayer?.prepare()
-            exoPlayer?.play()
-            val sessionId = exoPlayer?.audioSessionId ?: 0
+            val player = ensurePlayer() ?: return
+            player.stop()
+            player.setMediaItem(mediaItem)
+            player.prepare()
+            player.play()
+            val sessionId = player.audioSessionId
             _state.value = _state.value.copy(
                 currentTitle = fileName,
                 audioSessionId = sessionId,
@@ -144,10 +141,16 @@ class TestAudioPlayerManager(
     }
 
     fun loadReferenceTrack() {
+        if (ensurePlayer() == null) return
         scope.launch {
-            val sampleFile = withContext(Dispatchers.IO) { getOrCreateReferenceWav() }
-            if (exoPlayer != null) {
-                playCustomUri(Uri.fromFile(sampleFile), "Harmonic Reference Track")
+            try {
+                val sampleFile = withContext(Dispatchers.IO) { getOrCreateReferenceWav() }
+                if (sampleFile.exists() && exoPlayer != null) {
+                    playCustomUri(Uri.fromFile(sampleFile), "Harmonic Reference Track")
+                }
+            } catch (e: Exception) {
+                // Coroutine exceptions would otherwise kill the app process on some devices.
+                Log.e(TAG, "Unable to initialize reference audio", e)
             }
         }
     }
