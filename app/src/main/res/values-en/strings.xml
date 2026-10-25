@@ -150,4 +150,5 @@
     <string name="app_eq_applies">EQ enabled for this app (when an audio session is available)</string>
     <string name="app_eq_excluded">Excluded: AuraEQ effects disabled for this app</string>
     <string name="app_eq_platform_notice">Android allows EQ, Bass and Virtualizer only for sessions exposed by the player. Full moving left-right 8D cannot be applied to Spotify or all apps without system-level audio access.</string>
+    <string name="virtualizer_device_note">3D stereo widening also works on mono audio in the AuraEQ player. In Spotify and other apps, 3D depends on the audio session and headphone virtualization supported by your device.</string>
 </resources>
