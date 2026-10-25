@@ -78,6 +78,9 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    // Resolve localized messages in composition so they update on language changes.
+    val exportSuccessMessage = stringResource(R.string.toast_exported)
+    val importSuccessMessage = stringResource(R.string.toast_imported)
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val isDark = MaterialTheme.colorScheme.background.red < 0.2f
@@ -97,7 +100,7 @@ fun SettingsScreen(
                     context.contentResolver.openOutputStream(uri)?.use { os ->
                         os.write(json.toByteArray())
                     }
-                    Toast.makeText(context, context.getString(R.string.toast_exported), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, exportSuccessMessage, Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
                     Toast.makeText(context, "Export error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
@@ -124,7 +127,7 @@ fun SettingsScreen(
                     }
                     val success = viewModel.importProfilesJson(sb.toString())
                     if (success) {
-                        Toast.makeText(context, context.getString(R.string.toast_imported), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, importSuccessMessage, Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(context, "Invalid JSON backup format", Toast.LENGTH_SHORT).show()
                     }
