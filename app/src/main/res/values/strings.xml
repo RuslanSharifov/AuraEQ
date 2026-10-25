@@ -19,6 +19,10 @@
     <string name="route_usb">USB Audio</string>
     <string name="route_unknown">Standart Çıxış</string>
 
+    <string name="system_volume">Sistem media səsi</string>
+    <string name="volume_down">Səsi azalt</string>
+    <string name="volume_up">Səsi artır</string>
+
     <!-- Controls -->
     <string name="bass_boost">Bas Gücləndirici</string>
     <string name="treble">Tiz (Yüksək tezliklər)</string>
