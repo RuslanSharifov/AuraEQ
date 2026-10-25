@@ -8,6 +8,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,6 +44,15 @@ class TestAudioPlayerManager(
 ) {
     private val TAG = "TestAudioPlayer"
     private var exoPlayer: ExoPlayer? = null
+    private val spatialProcessor = SpatialAudioProcessor()
+
+    fun setSpatialSettings(settings: SpatialSettings, enabled: Boolean) {
+        spatialProcessor.update(settings, enabled)
+    }
+
+    fun clearAudioEffects() {
+        spatialProcessor.update(SpatialSettings(), false)
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var progressJob: Job? = null
 
@@ -57,7 +69,18 @@ class TestAudioPlayerManager(
     @OptIn(UnstableApi::class)
     private fun initPlayer() {
         try {
-            exoPlayer = ExoPlayer.Builder(context).build().apply {
+            val factory = object : DefaultRenderersFactory(context) {
+                override fun buildAudioSink(
+                    context: Context,
+                    enableFloatOutput: Boolean,
+                    enableAudioOutputPlaybackParams: Boolean
+                ): AudioSink {
+                    return DefaultAudioSink.Builder(context)
+                        .setAudioProcessors(arrayOf(spatialProcessor))
+                        .build()
+                }
+            }
+            exoPlayer = ExoPlayer.Builder(context, factory).build().apply {
                 repeatMode = Player.REPEAT_MODE_ALL
                 addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -238,6 +261,7 @@ class TestAudioPlayerManager(
     }
 
     fun release() {
+        clearAudioEffects()
         progressJob?.cancel()
         scope.cancel()
         try {
