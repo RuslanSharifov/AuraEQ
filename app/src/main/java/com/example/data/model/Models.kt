@@ -94,6 +94,7 @@ data class AppProfile(
     val appName: String,
     val presetId: String,
     val isEnabled: Boolean = true,
+    val useCustomPreset: Boolean = false,
     val isSessionActive: Boolean = false,
     val lastSessionId: Int = 0
 ) {
@@ -103,6 +104,7 @@ data class AppProfile(
         obj.put("appName", appName)
         obj.put("presetId", presetId)
         obj.put("isEnabled", isEnabled)
+        obj.put("useCustomPreset", useCustomPreset)
         return obj
     }
 
@@ -112,7 +114,8 @@ data class AppProfile(
                 packageName = obj.optString("packageName", ""),
                 appName = obj.optString("appName", ""),
                 presetId = obj.optString("presetId", "flat"),
-                isEnabled = obj.optBoolean("isEnabled", true)
+                isEnabled = obj.optBoolean("isEnabled", true),
+                useCustomPreset = obj.optBoolean("useCustomPreset", false)
             )
         }
     }
