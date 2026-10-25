@@ -238,17 +238,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Apply the configured profile when a player opens a *new* session.
-        // Do not remove an app when just one of its multiple sessions closes.
-        viewModelScope.launch {
-            app.sessionEvents.collect { event ->
-                if (event.isOpen && event.packageName != null) {
-                    val appProfile = _uiState.value.installedApps
-                        .find { it.packageName == event.packageName }
-                    if (appProfile?.isEnabled == true) applyPresetById(appProfile.presetId)
-                }
-            }
-        }
+        // Per-app preset ownership lives inside AudioEffectManager. An incoming
+        // Spotify session must NEVER replace global EQ sliders for every app.
 
         // Load installed media apps
         loadInstalledMediaApps()
@@ -417,22 +408,27 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleAppProfile(packageName: String, isEnabled: Boolean) {
         val existing = _uiState.value.installedApps.find { it.packageName == packageName } ?: return
-        val updated = existing.copy(isEnabled = isEnabled)
-        viewModelScope.launch {
-            val map = preferences.appProfilesFlow.first().toMutableMap()
-            map[packageName] = updated
-            preferences.saveAppProfile(updated, map)
-            loadInstalledMediaApps()
-        }
+        updateAppPolicy(existing.copy(isEnabled = isEnabled))
     }
 
     fun setAppPreset(packageName: String, presetId: String) {
         val existing = _uiState.value.installedApps.find { it.packageName == packageName } ?: return
-        val updated = existing.copy(presetId = presetId)
+        updateAppPolicy(existing.copy(presetId = presetId, useCustomPreset = true))
+    }
+
+    fun useGlobalAppPreset(packageName: String) {
+        val existing = _uiState.value.installedApps.find { it.packageName == packageName } ?: return
+        updateAppPolicy(existing.copy(useCustomPreset = false))
+    }
+
+    private fun updateAppPolicy(profile: AppProfile) {
+        _uiState.value = _uiState.value.copy(installedApps = _uiState.value.installedApps.map {
+            if (it.packageName == profile.packageName) profile else it
+        })
         viewModelScope.launch {
             val map = preferences.appProfilesFlow.first().toMutableMap()
-            map[packageName] = updated
-            preferences.saveAppProfile(updated, map)
+            map[profile.packageName] = profile
+            preferences.saveAppProfile(profile, map)
             loadInstalledMediaApps()
         }
     }
@@ -531,6 +527,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                             appName = label,
                             presetId = saved?.presetId ?: "flat",
                             isEnabled = saved?.isEnabled ?: true,
+                            useCustomPreset = saved?.useCustomPreset ?: false,
                             isSessionActive = isSessionActive
                         )
                     )
