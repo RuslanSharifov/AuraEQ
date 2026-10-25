@@ -50,9 +50,8 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
-      // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
-      // AI Studio.
-      signingConfig = signingConfigs.getByName("debugConfig")
+      // Use AGP's generated debug keystore so clean CI runners can sign the APK.
+      signingConfig = signingConfigs.getByName("debug")
     }
   }
   compileOptions {
