@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.audio.SpatialSettings
 import com.example.data.model.AppProfile
 import com.example.data.model.AudioDeviceType
 import com.example.data.model.EqualizerPreset
@@ -19,6 +20,7 @@ private val Context.dataStore by preferencesDataStore(name = "aura_eq_prefs")
 
 class AuraPreferencesRepository(private val context: Context) {
 
+    private val KEY_SPATIAL_SETTINGS = stringPreferencesKey("spatial_settings")
     private val KEY_ENABLED = booleanPreferencesKey("is_enabled")
     private val KEY_CURRENT_PRESET_ID = stringPreferencesKey("current_preset_id")
     private val KEY_CURRENT_GAINS = stringPreferencesKey("current_gains")
@@ -34,8 +36,53 @@ class AuraPreferencesRepository(private val context: Context) {
     private val KEY_LANGUAGE = stringPreferencesKey("language")
     private val KEY_DEVICE_AUTO_SWITCH = booleanPreferencesKey("device_auto_switch")
 
+    val spatialSettingsFlow: Flow<SpatialSettings> = context.dataStore.data.map { prefs ->
+        try {
+            val obj = JSONObject(prefs[KEY_SPATIAL_SETTINGS] ?: "{}")
+            SpatialSettings(
+                mode = obj.optString("mode", "off"),
+                leftPercent = obj.optInt("leftPercent", 100),
+                rightPercent = obj.optInt("rightPercent", 100),
+                leftTone = obj.optInt("leftTone", 0),
+                rightTone = obj.optInt("rightTone", 0),
+                staticPan = obj.optInt("staticPan", 0),
+                depth = obj.optInt("depth", 100),
+                periodSeconds = obj.optDouble("periodSeconds", 8.0).toFloat()
+            ).sanitized()
+        } catch (_: Exception) {
+            SpatialSettings()
+        }
+    }
+
+    suspend fun saveSpatialSettings(value: SpatialSettings) {
+        val state = value.sanitized()
+        val obj = JSONObject()
+            .put("mode", state.mode)
+            .put("leftPercent", state.leftPercent)
+            .put("rightPercent", state.rightPercent)
+            .put("leftTone", state.leftTone)
+            .put("rightTone", state.rightTone)
+            .put("staticPan", state.staticPan)
+            .put("depth", state.depth)
+            .put("periodSeconds", state.periodSeconds)
+        context.dataStore.edit { it[KEY_SPATIAL_SETTINGS] = obj.toString() }
+    }
+
+    /** Reset all *applied* audio parameters atomically; saved user presets remain available. */
+    suspend fun resetAudioTuning(disable: Boolean = false) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_CURRENT_PRESET_ID] = "flat"
+            prefs[KEY_CURRENT_GAINS] = "0,0,0,0,0"
+            prefs[KEY_BASS_BOOST] = 0
+            prefs[KEY_TREBLE] = 0
+            prefs[KEY_VIRTUALIZER] = 0
+            prefs.remove(KEY_SPATIAL_SETTINGS)
+            if (disable) prefs[KEY_ENABLED] = false
+        }
+    }
+
     val isEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_ENABLED] ?: true
+        prefs[KEY_ENABLED] ?: false
     }
 
     val currentPresetIdFlow: Flow<String> = context.dataStore.data.map { prefs ->
@@ -233,6 +280,7 @@ class AuraPreferencesRepository(private val context: Context) {
         return try {
             val obj = JSONObject(jsonStr)
             context.dataStore.edit { prefs ->
+                if (obj.has("spatial_settings")) prefs[KEY_SPATIAL_SETTINGS] = obj.getString("spatial_settings")
                 if (obj.has("is_enabled")) prefs[KEY_ENABLED] = obj.getBoolean("is_enabled")
                 if (obj.has("current_preset_id")) prefs[KEY_CURRENT_PRESET_ID] = obj.getString("current_preset_id")
                 if (obj.has("current_gains")) prefs[KEY_CURRENT_GAINS] = obj.getString("current_gains")
