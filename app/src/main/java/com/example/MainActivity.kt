@@ -155,9 +155,9 @@ fun AuraMainScreen(
     val backgroundBrush = if (isDark) {
         Brush.radialGradient(
             colors = listOf(
-                Color(0xFF1E2235),
+                Color(0xFF394A70),
                 AuraBgDark,
-                Color(0xFF090B13)
+                Color(0xFF1B2540)
             ),
             radius = 1600f
         )
@@ -191,7 +191,7 @@ fun AuraMainScreen(
                     .size(330.dp)
                     .background(
                         Brush.radialGradient(
-                            colors = if (isDark) listOf(Color(0x555C58CB), Color.Transparent)
+                            colors = if (isDark) listOf(Color(0x776F65D7), Color.Transparent)
                             else listOf(Color(0x99D7C6FF), Color.Transparent)
                         )
                     )
@@ -203,7 +203,7 @@ fun AuraMainScreen(
                     .size(280.dp)
                     .background(
                         Brush.radialGradient(
-                            colors = if (isDark) listOf(Color(0x4462D4DF), Color.Transparent)
+                            colors = if (isDark) listOf(Color(0x5562D4DF), Color.Transparent)
                             else listOf(Color(0x99B4E5FF), Color.Transparent)
                         )
                     )
