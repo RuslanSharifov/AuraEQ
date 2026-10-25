@@ -534,6 +534,28 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            // Offer explicit bypass for all user-launchable apps Android permits
+            // us to discover; this does not imply we can access their audio sessions.
+            val launcherIntent = Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+            for (activity in pm.queryIntentActivities(launcherIntent, 0)) {
+                val pkg = activity.activityInfo.packageName
+                if (pkg == getApplication<Application>().packageName ||
+                    discovered.any { it.packageName == pkg }
+                ) continue
+                val saved = savedMap[pkg]
+                discovered.add(
+                    AppProfile(
+                        packageName = pkg,
+                        appName = activity.loadLabel(pm).toString().ifBlank { pkg },
+                        presetId = saved?.presetId ?: "flat",
+                        isEnabled = saved?.isEnabled ?: true,
+                        useCustomPreset = saved?.useCustomPreset ?: false,
+                        isSessionActive = activePackagesSnapshot.contains(pkg)
+                    )
+                )
+            }
+
             // Check well-known media apps (Spotify, YouTube, VLC, etc.)
             val knownMediaPkgs = listOf(
                 "com.spotify.music" to "Spotify",
