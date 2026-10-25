@@ -71,6 +71,9 @@ class AudioEffectManager(private val context: Context) {
     }
 
     private val activeEffectSessions = mutableMapOf<Int, SessionEffects>()
+    // Remember observed sessions while EQ is disabled so enabling can reattach to a
+    // *valid* session (never deprecated global session 0).
+    private val knownSessionPackages = mutableMapOf<Int, String?>()
 
     // Current applied audio parameters
     private var isEnabled = true
@@ -189,6 +192,8 @@ class AudioEffectManager(private val context: Context) {
     @Synchronized
     fun attachSession(sessionId: Int, packageName: String? = null) {
         if (sessionId <= 0) return
+        knownSessionPackages[sessionId] = packageName
+        if (!isEnabled) return
         Log.i(TAG, "Attaching audio effects to session: $sessionId (pkg=$packageName)")
 
         val sessionEffects = activeEffectSessions.getOrPut(sessionId) {
@@ -252,6 +257,7 @@ class AudioEffectManager(private val context: Context) {
      */
     @Synchronized
     fun detachSession(sessionId: Int) {
+        knownSessionPackages.remove(sessionId)
         Log.i(TAG, "Detaching audio effects from session: $sessionId")
         val session = activeEffectSessions.remove(sessionId)
         session?.release()
@@ -260,11 +266,19 @@ class AudioEffectManager(private val context: Context) {
 
     @Synchronized
     fun setMasterEnabled(enabled: Boolean) {
-        this.isEnabled = enabled
-        activeEffectSessions.values.forEach { session ->
-            try { session.equalizer?.enabled = enabled } catch (_: Exception) {}
-            try { session.bassBoost?.enabled = enabled } catch (_: Exception) {}
-            try { session.virtualizer?.enabled = enabled } catch (_: Exception) {}
+        if (!enabled) {
+            this.isEnabled = false
+            // Android effects belong to our sessions. Disabling only the master flag
+            // can leave native tone coloration on some OEM audio stacks: release them.
+            activeEffectSessions.values.forEach { it.release() }
+            activeEffectSessions.clear()
+            _activeSessions.value = emptySet()
+            return
+        }
+        if (isEnabled && activeEffectSessions.isNotEmpty()) return
+        this.isEnabled = true
+        knownSessionPackages.toMap().forEach { (session, owner) ->
+            attachSession(session, owner)
         }
     }
 
@@ -438,7 +452,14 @@ class AudioEffectManager(private val context: Context) {
         _currentDeviceName.value = detectedName
     }
 
+    @Synchronized
     fun release() {
+        this.isEnabled = false
+        knownSessionPackages.clear()
+        bandGains.clear()
+        bassBoostStrength = 0
+        trebleValue = 0
+        virtualizerStrength = 0
         try {
             audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
         } catch (_: Exception) {}
