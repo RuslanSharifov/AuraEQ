@@ -37,7 +37,7 @@ class SpatialAudioProcessorTest {
     @Test
     fun per_ear_volume_changes_each_channel_independently() {
         val processor = makeProcessor()
-        processor.update(SpatialSettings(leftPercent = 40, rightPercent = 70), true)
+        processor.update(SpatialSettings(is8dEnabled = true, leftPercent = 40, rightPercent = 70), true)
         processor.queueInput(input(10000, 10000))
         val out = processor.output.order(ByteOrder.nativeOrder())
         assertEquals(4000, out.short.toInt())
@@ -47,7 +47,7 @@ class SpatialAudioProcessorTest {
     @Test
     fun static_pan_at_left_extreme_silences_right_ear() {
         val processor = makeProcessor()
-        processor.update(SpatialSettings(mode = "static", staticPan = -100), true)
+        processor.update(SpatialSettings(is8dEnabled = true, mode = "static", staticPan = -100), true)
         processor.queueInput(input(12000, 12000))
         val out = processor.output.order(ByteOrder.nativeOrder())
         assertEquals(12000, out.short.toInt())
@@ -57,7 +57,7 @@ class SpatialAudioProcessorTest {
     @Test
     fun dynamic_pan_moves_right_then_left_over_cycle() {
         val processor = makeProcessor(8000)
-        processor.update(SpatialSettings(mode = "dynamic", periodSeconds = 2f, depth = 100), true)
+        processor.update(SpatialSettings(is8dEnabled = true, mode = "dynamic", periodSeconds = 2f, depth = 100), true)
         val data = ByteBuffer.allocateDirect(16000 * 4).order(ByteOrder.nativeOrder())
         repeat(16000) {
             data.putShort(10000)
@@ -78,7 +78,7 @@ class SpatialAudioProcessorTest {
     @Test
     fun reset_to_off_stops_previous_pan_effect() {
         val processor = makeProcessor()
-        processor.update(SpatialSettings(mode = "static", staticPan = 100), true)
+        processor.update(SpatialSettings(is8dEnabled = true, mode = "static", staticPan = 100), true)
         processor.queueInput(input(10000, 10000))
         processor.output
         processor.update(SpatialSettings(), true)
