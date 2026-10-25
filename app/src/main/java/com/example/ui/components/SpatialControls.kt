@@ -42,7 +42,8 @@ fun SpatialControls(
                     Text(
                         stringResource(R.string.spatial_title),
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         stringResource(if (settings.is8dEnabled) R.string.spatial_enabled else R.string.spatial_disabled),
@@ -68,7 +69,7 @@ fun SpatialControls(
                 TextButton(
                     modifier = Modifier.testTag("spatial_reset"),
                     onClick = onReset
-                ) { Text(stringResource(R.string.spatial_reset)) }
+                ) { Text(stringResource(R.string.spatial_reset), color = MaterialTheme.colorScheme.primary) }
             }
             Spacer(Modifier.height(10.dp))
             Row(
@@ -89,7 +90,9 @@ fun SpatialControls(
                             containerColor = if (settings.mode == mode) AuraAccent
                                 else MaterialTheme.colorScheme.surfaceVariant,
                             contentColor = if (settings.mode == mode) androidx.compose.ui.graphics.Color.White
-                                else MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurface,
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.83f),
+                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.95f)
                         )
                     ) { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
                 }
@@ -144,7 +147,7 @@ private fun EarSlider(
     onChange: (Int) -> Unit
 ) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
         Text("$value$unit", color = AuraAccent, fontWeight = FontWeight.SemiBold)
     }
     Slider(
