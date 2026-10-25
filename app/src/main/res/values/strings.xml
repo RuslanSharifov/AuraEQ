@@ -151,4 +151,13 @@
     <string name="app_eq_excluded">İstisna: bu proqramda AuraEQ effektləri söndürülüb</string>
     <string name="app_eq_platform_notice">Android yalnız proqramın verdiyi audio sessiyaya EQ, Bass və Virtualizer tətbiq etməyə icazə verir. Spotify və digər proqramlarda tam 8D sol-sağ keçid sistem səviyyəsində mümkün deyil.</string>
     <string name="virtualizer_device_note">3D stereo genişləndirmə AuraEQ pleyerində mono musiqidə də işləyir. Spotify və digər tətbiqlərdə 3D təsiri cihazın audio sessiyası və qulaqcıq virtualizer dəstəyindən asılıdır.</string>
+
+    <string name="external_8d_title">Xarici tətbiqlər · 8D capture (sınaq)</string>
+    <string name="external_8d_disclaimer">Android yalnız capture icazəsi verən media və oyunların səsini ötürür. Spotify/YouTube çox vaxt bunu bloklayır. ORİJİNAL SƏS DAYANDIRILMIR: eyni vaxtda orijinal və emal olunmuş səs, gecikmə və əks-səda yarana bilər. Yalnız qulaqcıqla və aşağı səsdə sına. Yazı saxlanılmır.</string>
+    <string name="external_8d_unsupported">Android 10 və ya daha yuxarı versiya tələb olunur. Daxili pleyer 8D-si işləyir.</string>
+    <string name="external_8d_running">Capture aktivdir · uyğun səslər emal edilir (mənbə susdurulmur)</string>
+    <string name="external_8d_error">Capture başlanmadı və ya dayandı. İcazələri və mənbənin capture siyasətini yoxla.</string>
+    <string name="external_8d_stopped">Capture söndürülüb</string>
+    <string name="external_8d_start">İcazə ver və 8D capture başlat</string>
+    <string name="external_8d_stop">Capture dayandır</string>
 </resources>
