@@ -10,9 +10,11 @@ import com.example.audio.AudioSessionReceiver
 import com.example.audio.AudioEffectManager
 import com.example.audio.EqNotificationController
 import com.example.data.preferences.AuraPreferencesRepository
+import com.example.data.model.EqualizerPreset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -70,7 +72,19 @@ class AuraApplication : Application() {
         // Do not reset EQ on every process restart: Android may reclaim a background
         // process while Spotify is playing. Reset only on explicit user exit/reset.
         applicationScope.launch {
-            preferencesRepository.isEnabledFlow.collect { enabled ->
+            // The Application owns the policies, not the Activity. They stay active
+            // while the UI is closed and are applied before connecting sessions.
+            combine(
+                preferencesRepository.isEnabledFlow,
+                preferencesRepository.appProfilesFlow,
+                preferencesRepository.customPresetsFlow
+            ) { enabled, appProfiles, customPresets ->
+                Triple(enabled, appProfiles, customPresets)
+            }.collect { (enabled, appProfiles, customPresets) ->
+                audioEffectManager.configureAppPolicies(
+                    appProfiles,
+                    EqualizerPreset.getFactoryPresets() + customPresets
+                )
                 audioEffectManager.setMasterEnabled(enabled)
                 eqNotification.update(enabled)
             }
