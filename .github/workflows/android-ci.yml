@@ -98,18 +98,7 @@ jobs:
           ram-size: 1536M
           emulator-boot-timeout: 360
           disable-animations: true
-          script: |
-            set -e
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb logcat -c
-            adb shell am start -W -n com.aistudio.auraeq.pkvmrx/com.example.MainActivity
-            sleep 8
-            if ! adb shell pidof com.aistudio.auraeq.pkvmrx; then
-              echo "::error::AuraEQ exited immediately after first launch."
-              adb logcat -d -v time | grep -E -A 45 'FATAL EXCEPTION|AndroidRuntime|com.aistudio.auraeq.pkvmrx' | tail -n 200 || true
-              exit 1
-            fi
-            echo "AuraEQ remained running after startup."
+          script: bash .github/scripts/android-smoke-test.sh
 
       - name: Verify APK checksum
         if: success()
