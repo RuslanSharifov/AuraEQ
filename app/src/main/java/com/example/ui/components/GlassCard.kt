@@ -31,8 +31,8 @@ fun GlassCard(
     val backgroundBrush = if (isDark) {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0xE61E2338),
-                Color(0xCC161A2B)
+                Color(0xB3445375),
+                Color(0xA8273656)
             )
         )
     } else {
@@ -55,8 +55,8 @@ fun GlassCard(
             .shadow(
                 elevation = elevation,
                 shape = shape,
-                ambientColor = if (isDark) Color.Black.copy(alpha = 0.4f) else Color(0x208274F5),
-                spotColor = if (isDark) Color.Black.copy(alpha = 0.5f) else Color(0x33A6B4DF)
+                ambientColor = if (isDark) Color(0xFF151B35).copy(alpha = 0.25f) else Color(0x208274F5),
+                spotColor = if (isDark) Color(0xFF2C356A).copy(alpha = 0.3f) else Color(0x33A6B4DF)
             )
             .clip(shape)
             .background(backgroundBrush)
