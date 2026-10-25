@@ -141,4 +141,8 @@
     <string name="spotify_no_control_detail">Spotify sessiyası aşkarlanıb, amma Android EQ nəzarəti alınmayıb. Spotify-nin daxili EQ-sunu bağla və yenidən qoşul.</string>
     <string name="spotify_no_session_detail">Spotify audio sessiyası göndərməyib. Spotify-də mahnını başladıb onun Playback → Equalizer bölməsindən AuraEQ-nu aç. Android bütün tətbiqlərin sessiyasını avtomatik vermir.</string>
     <string name="spotify_retry_session">Audio sessiyanı yenilə</string>
+
+    <string name="spatial_enabled">8D effekti aktivdir</string>
+    <string name="spatial_disabled">8D effekti deaktivdir</string>
+    <string name="spatial_reset">Sıfırla</string>
 </resources>
