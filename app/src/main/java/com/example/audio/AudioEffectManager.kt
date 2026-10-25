@@ -84,7 +84,7 @@ class AudioEffectManager(private val context: Context) {
     private val knownSessionPackages = mutableMapOf<Int, String?>()
 
     // Current applied audio parameters
-    private var isEnabled = true
+    private var isEnabled = false // Remain neutral until user explicitly enables EQ
     private var bandGains = mutableListOf<Short>()
     private var bassBoostStrength: Short = 0
     private var trebleValue: Int = 0 // -1000..1000
