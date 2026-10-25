@@ -33,8 +33,18 @@ jobs:
       # GitHub's Ubuntu runner already provides Android command-line tools.
       # android-actions/setup-android@v3 currently fails trying to install retired "tools".
       - name: Install Android platform 36.1
+        shell: bash
         run: |
-          sdkmanager --install "platform-tools" "platforms;android-36" "platforms;android-36.1" "build-tools;36.0.0"
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDK_MANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print | sort -V | tail -n 1)"
+          if [[ -z "$SDK_MANAGER" ]]; then
+            echo "::error::Android SDK command-line tools not found under $SDK_ROOT"
+            exit 1
+          fi
+          echo "Using $SDK_MANAGER"
+          yes | "$SDK_MANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null || true
+          "$SDK_MANAGER" --sdk_root="$SDK_ROOT" --install "platform-tools" "platforms;android-36" "platforms;android-36.1" "build-tools;36.0.0"
 
       # The repository does not yet include gradlew or gradle-wrapper.jar.
       # Install the exact Gradle distribution required by AGP 9.1.1.
