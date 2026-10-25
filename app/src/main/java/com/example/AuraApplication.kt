@@ -67,6 +67,15 @@ class AuraApplication : Application() {
         }
     }
 
+    /** User closes the last Activity: release all native effects and clear live tuning. */
+    fun exitAndReset() {
+        audioEffectManager.release()
+        eqNotification.update(false)
+        applicationScope.launch {
+            preferencesRepository.resetAudioTuning(disable = true)
+        }
+    }
+
     fun onAudioSessionOpened(sessionId: Int, packageName: String?) {
         sessionPackageNames[sessionId] = packageName
         applicationScope.launch {
