@@ -102,6 +102,9 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             preferences.spatialSettingsFlow.collect { spatial ->
+                // A user edit still waiting in the save debounce is newer than any
+                // stored value; applying the stored one would snap the slider back.
+                if (spatialSaveJob?.isActive == true) return@collect
                 _uiState.value = _uiState.value.copy(spatialSettings = spatial)
                 testAudioPlayer.setSpatialSettings(spatial, _uiState.value.isEnabled)
                 External8dCaptureService.current?.updateSettings(spatial, _uiState.value.isEnabled)

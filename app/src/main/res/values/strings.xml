@@ -160,4 +160,7 @@
     <string name="external_8d_stopped">Capture söndürülüb</string>
     <string name="external_8d_start">İcazə ver və 8D capture başlat</string>
     <string name="external_8d_stop">Capture dayandır</string>
+    <string name="external_8d_no_signal">Səs siqnalı gəlmir: mənbə susdurulub və ya bu tətbiq capture-a icazə vermir (Spotify kimi). Orijinal səs normal işləyir.</string>
+    <string name="spatial_expand">8D panelini aç</string>
+    <string name="spatial_collapse">8D panelini bağla</string>
 </resources>

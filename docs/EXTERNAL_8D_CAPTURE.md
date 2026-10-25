@@ -31,3 +31,9 @@
 
 ## Fundamental limitation
 A capture-and-replay loop is **not** an OS output insert effect. Android does not allow third-party ordinary apps to replace Spotify's or YouTube's audio output. For lossless single-path system-wide post-processing, the OEM audio HAL/framework or root-level audio pipeline is required.
+
+## Status values
+- `running`: PCM with signal is being processed.
+- `no_signal`: capture is active but has delivered only silence for 3 seconds. Either the source is paused, or the source app refuses playback capture (Spotify and similar apps do this). The service keeps listening and returns to `running` once audio arrives. Original playback is never affected.
+- `error`: capture could not start or was interrupted (permission, consent, or AudioRecord/AudioTrack failure).
+- `unsupported`: Android 9 or lower, or RECORD_AUDIO missing.

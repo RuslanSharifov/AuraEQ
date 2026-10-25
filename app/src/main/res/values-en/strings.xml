@@ -160,4 +160,7 @@
     <string name="external_8d_stopped">Capture is stopped</string>
     <string name="external_8d_start">Grant permission and start 8D capture</string>
     <string name="external_8d_stop">Stop capture</string>
+    <string name="external_8d_no_signal">No audio signal: the source is silent or this app blocks capture (e.g. Spotify). Original playback is unaffected.</string>
+    <string name="spatial_expand">Expand 8D panel</string>
+    <string name="spatial_collapse">Collapse 8D panel</string>
 </resources>

@@ -14,7 +14,6 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.AudioTrack
@@ -40,8 +39,14 @@ import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-/** Playback capture is permitted only for apps that explicitly allow capture.
+/**
+ * Playback capture is permitted only for apps that explicitly allow capture.
  * It is a SECOND output and cannot mute/replace the source player's output.
+ *
+ * Status values: "stopped", "running", "no_signal", "unsupported", "error".
+ * "no_signal" means the stream is delivering only silence for several seconds:
+ * either the source is paused or it refuses capture (e.g. Spotify). The
+ * service keeps listening and switches back to "running" once audio arrives.
  */
 object External8dCaptureState {
     val status: StateFlow<String> get() = _status
@@ -57,6 +62,9 @@ class External8dCaptureService : Service() {
         const val EXTRA_RESULT_DATA = "result_data"
         private const val CHANNEL = "aura_capture"
         private const val NOTIFICATION_ID = 2208
+        private const val SAMPLE_RATE = 48000
+        /** Seconds of pure silence before the status is reported as "no_signal". */
+        private const val NO_SIGNAL_AFTER_SECONDS = 3
         @Volatile var current: External8dCaptureService? = null
             private set
 
@@ -71,9 +79,9 @@ class External8dCaptureService : Service() {
     private var recorder: AudioRecord? = null
     private var playback: AudioTrack? = null
     private var projection: MediaProjection? = null
-    private var engine = SpatialPcmEngine(48000)
-    private var settings = SpatialSettings()
-    private var masterEnabled = false
+    @Volatile private var engine = SpatialPcmEngine(SAMPLE_RATE)
+    @Volatile private var settings = SpatialSettings()
+    @Volatile private var masterEnabled = false
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() { stopSelf() }
     }
@@ -151,6 +159,7 @@ class External8dCaptureService : Service() {
         } catch (e: Exception) {
             Log.e("AuraExternal8D", "Capture unavailable", e)
             External8dCaptureState.set("error")
+            releaseAudio()
             stopSelf()
         }
         return START_NOT_STICKY
@@ -165,7 +174,7 @@ class External8dCaptureService : Service() {
             PackageManager.PERMISSION_GRANTED) {
             throw SecurityException("RECORD_AUDIO revoked before capture initialization")
         }
-        val rate = 48000
+        val rate = SAMPLE_RATE
         val mask = AudioFormat.CHANNEL_IN_STEREO
         val format = AudioFormat.Builder()
             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
@@ -179,19 +188,19 @@ class External8dCaptureService : Service() {
             .excludeUid(Process.myUid())
             .build()
         val minimumInput = AudioRecord.getMinBufferSize(rate, mask, AudioFormat.ENCODING_PCM_16BIT)
-        require(minimumInput > 0)
+        require(minimumInput > 0) { "Invalid capture buffer size" }
         val record = AudioRecord.Builder()
             .setAudioFormat(format)
             .setBufferSizeInBytes(maxOf(minimumInput, rate / 5 * 4))
             .setAudioPlaybackCaptureConfig(captureConfig)
             .build()
-        require(record.state == AudioRecord.STATE_INITIALIZED)
         recorder = record
+        require(record.state == AudioRecord.STATE_INITIALIZED) { "AudioRecord not initialized" }
 
         val minOutput = AudioTrack.getMinBufferSize(
             rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT
         )
-        require(minOutput > 0)
+        require(minOutput > 0) { "Invalid output buffer size" }
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -209,8 +218,9 @@ class External8dCaptureService : Service() {
             .setBufferSizeInBytes(maxOf(minOutput * 2, rate / 10 * 4))
             .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
             .build()
-        require(track.state == AudioTrack.STATE_INITIALIZED)
         playback = track
+        require(track.state == AudioTrack.STATE_INITIALIZED) { "AudioTrack not initialized" }
+
         engine = SpatialPcmEngine(rate)
         engine.update(settings, masterEnabled)
 
@@ -221,22 +231,46 @@ class External8dCaptureService : Service() {
         worker = thread(name = "AuraExternal8DAudio", priority = Thread.MAX_PRIORITY) {
             val src = ByteBuffer.allocateDirect(1920 * 4).order(ByteOrder.nativeOrder())
             val dst = ByteBuffer.allocateDirect(1920 * 4).order(ByteOrder.nativeOrder())
+            val silenceLimitFrames = SAMPLE_RATE.toLong() * NO_SIGNAL_AFTER_SECONDS
+            var silentFrames = 0L
+            var reportingNoSignal = false
             try {
                 record.startRecording()
                 track.play()
                 while (running.get()) {
                     src.clear()
                     val bytes = record.read(src, src.capacity(), AudioRecord.READ_BLOCKING)
-                    if (bytes <= 0) continue
+                    // Negative values are AudioRecord error codes (e.g. ERROR_INVALID_OPERATION).
+                    // Ignoring them would spin this loop forever.
+                    if (bytes < 0) throw IllegalStateException("AudioRecord read failed: $bytes")
+                    if (bytes == 0) continue
                     src.position(0)
                     src.limit(bytes - bytes % 4)
+
+                    // Silence tracking uses absolute reads so src's position is untouched.
+                    val frames = src.limit() / 4
+                    if (hasSignal(src)) {
+                        silentFrames = 0
+                        if (reportingNoSignal) {
+                            reportingNoSignal = false
+                            External8dCaptureState.set("running")
+                        }
+                    } else {
+                        silentFrames += frames
+                        if (!reportingNoSignal && silentFrames >= silenceLimitFrames) {
+                            reportingNoSignal = true
+                            External8dCaptureState.set("no_signal")
+                        }
+                    }
+
                     dst.clear()
                     val processed = engine.process(src, dst)
                     dst.flip()
                     var sent = 0
                     while (sent < processed && running.get()) {
                         val written = track.write(dst, processed - sent, AudioTrack.WRITE_BLOCKING)
-                        if (written <= 0) break
+                        if (written < 0) throw IllegalStateException("AudioTrack write failed: $written")
+                        if (written == 0) break
                         sent += written
                     }
                 }
@@ -249,9 +283,18 @@ class External8dCaptureService : Service() {
         }
     }
 
-    override fun onDestroy() {
-        settingsScope.cancel()
-        running.set(false)
+    /** True if any sample in the buffer is non-zero. Uses absolute reads; position is unchanged. */
+    private fun hasSignal(buf: ByteBuffer): Boolean {
+        val end = buf.limit()
+        var i = 0
+        while (i + 1 < end) {
+            if (buf.getShort(i).toInt() != 0) return true
+            i += 2
+        }
+        return false
+    }
+
+    private fun releaseAudio() {
         val r = recorder
         val t = playback
         recorder = null
@@ -261,6 +304,12 @@ class External8dCaptureService : Service() {
         runCatching { t?.flush() }
         runCatching { r?.release() }
         runCatching { t?.release() }
+    }
+
+    override fun onDestroy() {
+        settingsScope.cancel()
+        running.set(false)
+        releaseAudio()
         worker?.let { if (it != Thread.currentThread()) runCatching { it.join(250) } }
         worker = null
         projection?.let {

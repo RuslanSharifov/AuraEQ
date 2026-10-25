@@ -413,13 +413,15 @@ fun EqualizerScreen(
                         Build.VERSION.SDK_INT < 29 -> stringResource(R.string.external_8d_unsupported)
                         externalCaptureStatus == "running" -> stringResource(R.string.external_8d_running)
                         externalCaptureStatus == "error" -> stringResource(R.string.external_8d_error)
+                        externalCaptureStatus == "no_signal" -> stringResource(R.string.external_8d_no_signal)
                         else -> stringResource(R.string.external_8d_stopped)
                     },
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.labelMedium
                 )
                 Spacer(Modifier.height(8.dp))
-                if (externalCaptureStatus == "running") {
+                // "no_signal" means the service is still capturing, so offer Stop, not Start.
+                if (externalCaptureStatus == "running" || externalCaptureStatus == "no_signal") {
                     Button(
                         onClick = onStopExternal8d,
                         modifier = Modifier.testTag("stop_external_8d")
