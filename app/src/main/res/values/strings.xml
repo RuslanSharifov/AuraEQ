@@ -145,4 +145,9 @@
     <string name="spatial_enabled">8D effekti aktivdir</string>
     <string name="spatial_disabled">8D effekti deaktivdir</string>
     <string name="spatial_reset">Sıfırla</string>
+
+    <string name="app_global_eq">Ümumi EQ ayarını istifadə et</string>
+    <string name="app_eq_applies">EQ bu proqramda aktivdir (audio sessiya açılarsa)</string>
+    <string name="app_eq_excluded">İstisna: bu proqramda AuraEQ effektləri söndürülüb</string>
+    <string name="app_eq_platform_notice">Android yalnız proqramın verdiyi audio sessiyaya EQ, Bass və Virtualizer tətbiq etməyə icazə verir. Spotify və digər proqramlarda tam 8D sol-sağ keçid sistem səviyyəsində mümkün deyil.</string>
 </resources>
