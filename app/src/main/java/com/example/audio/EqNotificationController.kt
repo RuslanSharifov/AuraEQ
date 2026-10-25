@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
  */
 class EqNotificationController(private val context: Context) {
     private val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private var hasShownActiveNotification = false
     companion object {
         const val CHANNEL_ID = "aura_eq_active"
         const val NOTIFICATION_ID = 1008
@@ -41,14 +42,25 @@ class EqNotificationController(private val context: Context) {
         }
     }
 
+    fun clear() {
+        hasShownActiveNotification = false
+        manager.cancel(NOTIFICATION_ID)
+    }
+
     fun update(enabled: Boolean) {
-        if (!enabled) {
+        // No notification on a fresh disabled startup. Once the user enables it,
+        // leave a dismissible "Activate" notification after disabling.
+        if (!enabled && !hasShownActiveNotification) {
             manager.cancel(NOTIFICATION_ID)
             return
         }
         if (Build.VERSION.SDK_INT >= 33 &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        ) {
+            clear()
+            return
+        }
+        if (enabled) hasShownActiveNotification = true
 
         val contentIntent = PendingIntent.getActivity(
             context, 10, Intent(context, MainActivity::class.java),
@@ -65,14 +77,14 @@ class EqNotificationController(private val context: Context) {
             Notification.Builder(context)
         }
         val notification = builder
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("AuraEQ · Ekvalayzer aktivdir")
-            .setContentText("Səsi dəyişmək üçün aç · Söndürmək üçün toxun")
+            .setSmallIcon(if (enabled) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause)
+            .setContentTitle(if (enabled) "AuraEQ · EQ aktivdir" else "AuraEQ · EQ deaktivdir")
+            .setContentText(if (enabled) "Bildirişdən söndürə bilərsən" else "Aktiv et və ya bildirişi sil")
             .setContentIntent(contentIntent)
-            .setOngoing(true)
+            .setOngoing(enabled)
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_SERVICE)
-            .addAction(Notification.Action.Builder(null, "Deaktiv et", toggleIntent).build())
+            .addAction(Notification.Action.Builder(null, if (enabled) "Deaktiv et" else "Aktiv et", toggleIntent).build())
             .build()
         try {
             manager.notify(NOTIFICATION_ID, notification)
