@@ -28,21 +28,30 @@ private val LightColorScheme = lightColorScheme(
 
 private val DarkColorScheme = darkColorScheme(
     primary = AuraAccentDark,
-    onPrimary = Color(0xFF0F121E),
-    primaryContainer = Color(0xFF292454),
+    onPrimary = Color(0xFF161C30),
+    primaryContainer = Color(0xFF38365F),
     onPrimaryContainer = Color(0xFFE2DDFF),
-    secondary = Color(0xFF1E283E),
+    secondary = Color(0xFF354563),
     onSecondary = AuraTextPrimaryDark,
-    tertiary = Color(0xFF193238),
+    tertiary = Color(0xFF254C59),
     onTertiary = Color(0xFFD5FAF5),
     background = AuraBgDark,
     onBackground = AuraTextPrimaryDark,
     surface = AuraSurfaceDark,
     onSurface = AuraTextPrimaryDark,
-    surfaceVariant = Color(0xFF22283D),
+    surfaceVariant = Color(0xFF35425C),
     onSurfaceVariant = AuraTextSecondaryDark,
-    outline = Color(0xFF333B54),
-    outlineVariant = Color(0xFF262D42)
+    outline = Color(0xFF65718D),
+    outlineVariant = Color(0xFF42516B),
+    surfaceDim = Color(0xFF1E2940),
+    surfaceBright = Color(0xFF42516E),
+    surfaceContainerLowest = Color(0xFF202B42),
+    surfaceContainerLow = Color(0xFF293650),
+    surfaceContainer = Color(0xFF30405C),
+    surfaceContainerHigh = Color(0xFF394A68),
+    surfaceContainerHighest = Color(0xFF435574),
+    inverseSurface = Color(0xFFE2E9FF),
+    inverseOnSurface = Color(0xFF20283F)
 )
 
 @Composable
