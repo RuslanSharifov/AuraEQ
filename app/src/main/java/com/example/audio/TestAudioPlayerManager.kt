@@ -34,6 +34,7 @@ data class TestPlayerState(
     val isReady: Boolean = false
 )
 
+@OptIn(UnstableApi::class)
 class TestAudioPlayerManager(
     private val context: Context,
     private val onSessionReady: (Int) -> Unit
