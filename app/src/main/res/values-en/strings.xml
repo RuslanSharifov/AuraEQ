@@ -19,6 +19,10 @@
     <string name="route_usb">USB Audio</string>
     <string name="route_unknown">Default Output</string>
 
+    <string name="system_volume">System media volume</string>
+    <string name="volume_down">Volume down</string>
+    <string name="volume_up">Volume up</string>
+
     <!-- Controls -->
     <string name="bass_boost">Bass Boost</string>
     <string name="treble">Treble (Highs)</string>
