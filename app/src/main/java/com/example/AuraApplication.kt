@@ -70,7 +70,7 @@ class AuraApplication : Application() {
     /** User closes the last Activity: release all native effects and clear live tuning. */
     fun exitAndReset() {
         audioEffectManager.release()
-        eqNotification.update(false)
+        eqNotification.clear()
         applicationScope.launch {
             preferencesRepository.resetAudioTuning(disable = true)
         }
@@ -93,6 +93,6 @@ class AuraApplication : Application() {
     override fun onTerminate() {
         super.onTerminate()
         audioEffectManager.release()
-        eqNotification.update(false)
+        eqNotification.clear()
     }
 }
