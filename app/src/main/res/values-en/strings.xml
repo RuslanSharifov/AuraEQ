@@ -1,0 +1,118 @@
+<resources>
+    <string name="app_name">AURA EQ</string>
+    <string name="app_tagline">Premium Android Equalizer</string>
+
+    <!-- Navigation -->
+    <string name="nav_equalizer">Equalizer</string>
+    <string name="nav_apps">Apps</string>
+    <string name="nav_presets">Presets</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Equalizer Screen -->
+    <string name="status_power_on">Equalizer Active</string>
+    <string name="status_power_off">Equalizer Disabled</string>
+    <string name="status_active_sessions">Active audio sessions: %1$d</string>
+    <string name="status_output_route">Output device: %1$s</string>
+    <string name="route_speaker">Phone Speaker</string>
+    <string name="route_wired_headphones">Wired Headphones</string>
+    <string name="route_bluetooth">Bluetooth Audio</string>
+    <string name="route_usb">USB Audio</string>
+    <string name="route_unknown">Default Output</string>
+
+    <!-- Controls -->
+    <string name="bass_boost">Bass Boost</string>
+    <string name="treble">Treble (Highs)</string>
+    <string name="virtualizer">3D Surround</string>
+    <string name="reset_neutral">Reset</string>
+    <string name="save_profile">Save Profile</string>
+    <string name="active_preset">Active: %1$s</string>
+    <string name="device_hardware_bands">%1$d-Band Hardware Equalizer</string>
+    <string name="effect_unsupported">Not supported on this hardware</string>
+    <string name="safe_levels_active">Safe level limiter active</string>
+
+    <!-- Test Audio Player -->
+    <string name="test_player_title">Built-in Test Player</string>
+    <string name="test_player_desc">Select a local audio file or play the harmonic reference track to verify real-time audio equalization</string>
+    <string name="test_player_play">Play</string>
+    <string name="test_player_pause">Pause</string>
+    <string name="test_player_pick_file">Pick Audio File</string>
+    <string name="test_player_sample">Reference Signal</string>
+    <string name="test_player_no_file">No audio file selected</string>
+    <string name="test_player_session_id">Audio Session ID: %1$d</string>
+
+    <!-- Presets Screen -->
+    <string name="presets_title">Sound Profiles</string>
+    <string name="presets_subtitle">Mastered frequency curves tailored for every genre and environment</string>
+    <string name="create_new_preset">Create New Preset</string>
+    <string name="preset_name_label">Preset Name</string>
+    <string name="delete_preset">Delete</string>
+    <string name="duplicate_preset">Duplicate</string>
+    <string name="edit_preset">Edit</string>
+    <string name="preset_custom_tag">Custom</string>
+    <string name="preset_system_tag">Factory</string>
+
+    <!-- Built-in Preset Names -->
+    <string name="preset_flat">Normal / Flat</string>
+    <string name="preset_deep_bass">Deep Bass</string>
+    <string name="preset_bass_boost">Bass Boost</string>
+    <string name="preset_vocal_clarity">Vocal Clarity</string>
+    <string name="preset_rock">Rock</string>
+    <string name="preset_pop">Pop</string>
+    <string name="preset_electronic">Electronic</string>
+    <string name="preset_jazz">Jazz</string>
+    <string name="preset_classical">Classical</string>
+    <string name="preset_podcast">Podcast</string>
+    <string name="preset_gaming">Gaming</string>
+    <string name="preset_movie">Movie</string>
+    <string name="preset_custom">Custom Tuning</string>
+
+    <!-- Per-App Screen -->
+    <string name="apps_title">App Profiles</string>
+    <string name="apps_subtitle">Assign distinct sound profiles to your favorite media and entertainment apps</string>
+    <string name="search_apps_hint">Search media apps...</string>
+    <string name="app_profile_saved_unsupported">Profile saved — audio control is not supported for this app on this device.</string>
+    <string name="app_profile_active">Active audio processing</string>
+    <string name="app_profile_listening">Awaiting audio session</string>
+    <string name="no_apps_found">No media applications found</string>
+    <string name="app_enable_profile">Enable sound profile</string>
+    <string name="app_select_preset">Select sound profile for app</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_appearance">Appearance &amp; Theme</string>
+    <string name="theme_light">Pearl Glass (Default)</string>
+    <string name="theme_dark">Dark Glass</string>
+    <string name="theme_system">System Appearance</string>
+    <string name="settings_section_audio">Audio &amp; Device Profiles</string>
+    <string name="default_preset_preference">Default Sound Profile</string>
+    <string name="device_auto_switch">Automatic device route switching</string>
+    <string name="device_auto_switch_desc">Switch profile automatically when headphones or Bluetooth connect</string>
+    <string name="settings_section_interaction">Haptics &amp; Motion</string>
+    <string name="haptic_feedback">Haptic Feedback</string>
+    <string name="haptic_feedback_desc">Subtle tactile click on slider adjustments and buttons</string>
+    <string name="smooth_animations">Fluid Animations</string>
+    <string name="smooth_animations_desc">Smooth equalizer curves and reactive glass surfaces</string>
+    <string name="settings_section_data">Storage &amp; Backup</string>
+    <string name="export_profiles">Export Profiles (JSON)</string>
+    <string name="import_profiles">Import Profiles</string>
+    <string name="reset_all_settings">Reset All Settings</string>
+    <string name="settings_section_general">About &amp; Language</string>
+    <string name="language_selection">Language</string>
+    <string name="lang_az">Azərbaycan dili</string>
+    <string name="lang_en">English</string>
+    <string name="privacy_policy">Privacy Policy</string>
+    <string name="privacy_policy_desc">AURA EQ does not collect any personal data. All audio adjustments happen strictly on-device offline.</string>
+    <string name="about_version">AURA EQ v1.0.0 (Build 1)</string>
+    <string name="about_info">AURA EQ is a native Android equalizer built with Android AudioEffect DSP architecture and premium glassmorphism design.</string>
+
+    <!-- Dialogs & Actions -->
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="confirm_reset_title">Reset all settings?</string>
+    <string name="confirm_reset_message">All custom equalizer curves and per-app configurations will be restored to defaults.</string>
+    <string name="dialog_create_preset">New Sound Profile</string>
+    <string name="toast_preset_saved">Profile saved</string>
+    <string name="toast_imported">Profiles imported successfully</string>
+    <string name="toast_exported">Profiles exported successfully</string>
+</resources>

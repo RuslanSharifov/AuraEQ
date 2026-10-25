@@ -1,0 +1,77 @@
+package com.example
+
+import android.app.Application
+import com.example.audio.AudioEffectManager
+import com.example.data.preferences.AuraPreferencesRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
+
+data class SessionEvent(val sessionId: Int, val packageName: String?, val isOpen: Boolean)
+
+class AuraApplication : Application() {
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    lateinit var audioEffectManager: AudioEffectManager
+        private set
+
+    lateinit var preferencesRepository: AuraPreferencesRepository
+        private set
+
+    private val _sessionEvents = MutableSharedFlow<SessionEvent>(replay = 1)
+    val sessionEvents = _sessionEvents.asSharedFlow()
+
+    override fun onCreate() {
+        super.onCreate()
+        preferencesRepository = AuraPreferencesRepository(this)
+        audioEffectManager = AudioEffectManager(this)
+
+        // Observe initial enabled state and gains from DataStore
+        applicationScope.launch {
+            preferencesRepository.isEnabledFlow.collect { enabled ->
+                audioEffectManager.setMasterEnabled(enabled)
+            }
+        }
+        applicationScope.launch {
+            preferencesRepository.currentGainsFlow.collect { gains ->
+                audioEffectManager.setBandsGains(gains)
+            }
+        }
+        applicationScope.launch {
+            preferencesRepository.bassBoostFlow.collect { bb ->
+                audioEffectManager.setBassBoost(bb)
+            }
+        }
+        applicationScope.launch {
+            preferencesRepository.trebleFlow.collect { treble ->
+                audioEffectManager.setTreble(treble)
+            }
+        }
+        applicationScope.launch {
+            preferencesRepository.virtualizerFlow.collect { virt ->
+                audioEffectManager.setVirtualizer(virt)
+            }
+        }
+    }
+
+    fun onAudioSessionOpened(sessionId: Int, packageName: String?) {
+        applicationScope.launch {
+            _sessionEvents.emit(SessionEvent(sessionId, packageName, isOpen = true))
+        }
+    }
+
+    fun onAudioSessionClosed(sessionId: Int) {
+        applicationScope.launch {
+            _sessionEvents.emit(SessionEvent(sessionId, null, isOpen = false))
+        }
+    }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        audioEffectManager.release()
+    }
+}

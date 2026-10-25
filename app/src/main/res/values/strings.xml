@@ -1,0 +1,118 @@
+<resources>
+    <string name="app_name">AURA EQ</string>
+    <string name="app_tagline">Premial Səs Ekvalayzeri</string>
+
+    <!-- Navigation -->
+    <string name="nav_equalizer">Ekvalayzer</string>
+    <string name="nav_apps">Tətbiqlər</string>
+    <string name="nav_presets">Ön təyinatlar</string>
+    <string name="nav_settings">Tənzimləmələr</string>
+
+    <!-- Equalizer Screen -->
+    <string name="status_power_on">Ekvalayzer Aktivdir</string>
+    <string name="status_power_off">Ekvalayzer Söndürülüb</string>
+    <string name="status_active_sessions">Aktiv audio sessiyaları: %1$d</string>
+    <string name="status_output_route">Çıxış qurğusu: %1$s</string>
+    <string name="route_speaker">Daxili Dinamik</string>
+    <string name="route_wired_headphones">Naqilli Qulaqlıq</string>
+    <string name="route_bluetooth">Bluetooth Audio</string>
+    <string name="route_usb">USB Audio</string>
+    <string name="route_unknown">Standart Çıxış</string>
+
+    <!-- Controls -->
+    <string name="bass_boost">Bas Gücləndirici</string>
+    <string name="treble">Tiz (Yüksək tezliklər)</string>
+    <string name="virtualizer">3D Surround Səs</string>
+    <string name="reset_neutral">Sıfırla</string>
+    <string name="save_profile">Profili Saxla</string>
+    <string name="active_preset">Aktiv Profil: %1$s</string>
+    <string name="device_hardware_bands">%1$d zolaqlı aparat ekvalayzeri</string>
+    <string name="effect_unsupported">Qurğu tərəfindən dəstəklənmir</string>
+    <string name="safe_levels_active">Təhlükəsiz səviyyə nəzarəti aktivdir</string>
+
+    <!-- Test Audio Player -->
+    <string name="test_player_title">Daxili Sınaq Pleyeri</string>
+    <string name="test_player_desc">Ekvalayzer effektlərini real vaxtda yoxlamaq üçün audio fayl seçin və ya sınaq trekinə qulaq asın</string>
+    <string name="test_player_play">Oynat</string>
+    <string name="test_player_pause">Fasilə</string>
+    <string name="test_player_pick_file">Audio Fayl Seç</string>
+    <string name="test_player_sample">Sınaq Siqnalı</string>
+    <string name="test_player_no_file">Heç bir fayl seçilməyib</string>
+    <string name="test_player_session_id">Audio Sessiya ID: %1$d</string>
+
+    <!-- Presets Screen -->
+    <string name="presets_title">Səs Profilləri</string>
+    <string name="presets_subtitle">Hər janr və şərait üçün xüsusi köklənmiş profillər</string>
+    <string name="create_new_preset">Yeni Profil Yarat</string>
+    <string name="preset_name_label">Profil adı</string>
+    <string name="delete_preset">Sil</string>
+    <string name="duplicate_preset">Kopyasını çıxar</string>
+    <string name="edit_preset">Düzəliş et</string>
+    <string name="preset_custom_tag">Fərdi</string>
+    <string name="preset_system_tag">Standart</string>
+
+    <!-- Built-in Preset Names -->
+    <string name="preset_flat">Normal / Düz</string>
+    <string name="preset_deep_bass">Dərin Bas</string>
+    <string name="preset_bass_boost">Bas Gücləndirici</string>
+    <string name="preset_vocal_clarity">Aydın Vokal</string>
+    <string name="preset_rock">Rok</string>
+    <string name="preset_pop">Pop</string>
+    <string name="preset_electronic">Elektronik</string>
+    <string name="preset_jazz">Caz</string>
+    <string name="preset_classical">Klassik</string>
+    <string name="preset_podcast">Podkast</string>
+    <string name="preset_gaming">Oyun</string>
+    <string name="preset_movie">Film</string>
+    <string name="preset_custom">Fərdi Kökləmə</string>
+
+    <!-- Per-App Screen -->
+    <string name="apps_title">Tətbiq Profilləri</string>
+    <string name="apps_subtitle">Fərqli media tətbiqləri üçün fərdi səs profillərini təyin edin</string>
+    <string name="search_apps_hint">Tətbiqləri axtar...</string>
+    <string name="app_profile_saved_unsupported">Profil saxlanıldı — bu cihazda bu tətbiq üçün audio nəzarəti dəstəklənmir.</string>
+    <string name="app_profile_active">Aktiv audio nəzarəti</string>
+    <string name="app_profile_listening">Sessiya gözlənilir</string>
+    <string name="no_apps_found">Tətbiq tapılmadı</string>
+    <string name="app_enable_profile">Profili aktivləşdir</string>
+    <string name="app_select_preset">Tətbiq üçün profil seçin</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Tənzimləmələr</string>
+    <string name="settings_section_appearance">Görünüş &amp; Mövzu</string>
+    <string name="theme_light">Açıq Şüşə (Standart)</string>
+    <string name="theme_dark">Qaranlıq Şüşə</string>
+    <string name="theme_system">Sistem Görünüşü</string>
+    <string name="settings_section_audio">Audio &amp; Cihaz Profilləri</string>
+    <string name="default_preset_preference">Standart Səs Profili</string>
+    <string name="device_auto_switch">Qurğuya görə avtomatik profil keçidi</string>
+    <string name="device_auto_switch_desc">Qulaqlıq və ya dinamik qoşulduqda yadda saxlanılmış profili tətbiq et</string>
+    <string name="settings_section_interaction">İnterfeys &amp; Hissiyyat</string>
+    <string name="haptic_feedback">Haptik Titrəmə</string>
+    <string name="haptic_feedback_desc">Sürgüləri və düymələri toxunarkən yüngül toxunma hissi</string>
+    <string name="smooth_animations">Axıcı Animasiyalar</string>
+    <string name="smooth_animations_desc">Gözəl şüşə və tezlik dalğası animasiyaları</string>
+    <string name="settings_section_data">Yaddaş &amp; İxrac</string>
+    <string name="export_profiles">Profilləri İxrac Et (JSON)</string>
+    <string name="import_profiles">Profilləri İdxal Et</string>
+    <string name="reset_all_settings">Bütün parametrləri sıfırla</string>
+    <string name="settings_section_general">Haqqında &amp; Dil</string>
+    <string name="language_selection">Tətbiq Dili</string>
+    <string name="lang_az">Azərbaycan dili</string>
+    <string name="lang_en">English</string>
+    <string name="privacy_policy">Məxfilik Siyasəti</string>
+    <string name="privacy_policy_desc">AURA EQ heç bir şəxsi məlumat toplamır və bütün emal yalnız cihazınızda oflayn rejimdə baş verir.</string>
+    <string name="about_version">AURA EQ v1.0.0 (Build 1)</string>
+    <string name="about_info">AURA EQ peşəkar audio DSP texnologiyası və təmiz şüşə dizaynı ilə təchiz edilmiş yerli Android tətbiqidir.</string>
+
+    <!-- Dialogs & Actions -->
+    <string name="action_save">Saxla</string>
+    <string name="action_cancel">Ləğv et</string>
+    <string name="action_delete">Sil</string>
+    <string name="confirm_reset_title">Parametrləri sıfırlamaq istəyirsiniz?</string>
+    <string name="confirm_reset_message">Bütün fərdi profillər və tənzimləmələr ilkin vəziyyətinə qaytarılacaq.</string>
+    <string name="dialog_create_preset">Yeni Səs Profili</string>
+    <string name="toast_preset_saved">Profil saxlanıldı</string>
+    <string name="toast_imported">Profillər uğurla idxal edildi</string>
+    <string name="toast_exported">Profillər ixrac edildi</string>
+</resources>
