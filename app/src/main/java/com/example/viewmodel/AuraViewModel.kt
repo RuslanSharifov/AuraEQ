@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.AuraApplication
 import com.example.audio.TestAudioPlayerManager
 import com.example.audio.TestPlayerState
+import com.example.audio.SpatialSettings
 import com.example.data.model.AppProfile
 import com.example.data.model.AudioDeviceType
 import com.example.data.model.AudioEngineCapabilities
@@ -28,7 +29,7 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 data class AuraUiState(
-    val isEnabled: Boolean = true,
+    val isEnabled: Boolean = false,
     val activePresetId: String = "flat",
     val activePresetName: String = "Normal / Flat",
     val factoryPresets: List<EqualizerPreset> = EqualizerPreset.getFactoryPresets(),
@@ -37,6 +38,7 @@ data class AuraUiState(
     val bassBoost: Int = 0, // 0..1000
     val treble: Int = 0, // -1000..1000
     val virtualizer: Int = 0, // 0..1000
+    val spatialSettings: SpatialSettings = SpatialSettings(),
     val capabilities: AudioEngineCapabilities = AudioEngineCapabilities(),
     val currentDeviceType: AudioDeviceType = AudioDeviceType.SPEAKER,
     val currentDeviceName: String = "Phone Speaker",
@@ -73,6 +75,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private var bassSaveJob: Job? = null
     private var trebleSaveJob: Job? = null
     private var virtualizerSaveJob: Job? = null
+    private var spatialSaveJob: Job? = null
     private val sliderSaveDelayMs = 180L
 
     private fun cancelPendingSliderSaves() {
@@ -80,6 +83,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         bassSaveJob?.cancel()
         trebleSaveJob?.cancel()
         virtualizerSaveJob?.cancel()
+        spatialSaveJob?.cancel()
     }
 
     init {
@@ -88,6 +92,14 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             preferences.isEnabledFlow.collect { enabled ->
                 _uiState.value = _uiState.value.copy(isEnabled = enabled)
                 audioEffectManager.setMasterEnabled(enabled)
+                testAudioPlayer.setSpatialSettings(_uiState.value.spatialSettings, enabled)
+            }
+        }
+
+        viewModelScope.launch {
+            preferences.spatialSettingsFlow.collect { spatial ->
+                _uiState.value = _uiState.value.copy(spatialSettings = spatial)
+                testAudioPlayer.setSpatialSettings(spatial, _uiState.value.isEnabled)
             }
         }
 
@@ -231,9 +243,10 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleMasterPower() {
         val newState = !_uiState.value.isEnabled
-        viewModelScope.launch {
-            preferences.setEnabled(newState)
-        }
+        _uiState.value = _uiState.value.copy(isEnabled = newState)
+        audioEffectManager.setMasterEnabled(newState)
+        testAudioPlayer.setSpatialSettings(_uiState.value.spatialSettings, newState)
+        viewModelScope.launch { preferences.setEnabled(newState) }
     }
 
     fun selectPreset(preset: EqualizerPreset) {
@@ -310,9 +323,33 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setSpatialSettings(value: SpatialSettings) {
+        val updated = value.sanitized()
+        _uiState.value = _uiState.value.copy(spatialSettings = updated)
+        testAudioPlayer.setSpatialSettings(updated, _uiState.value.isEnabled)
+        spatialSaveJob?.cancel()
+        spatialSaveJob = viewModelScope.launch {
+            delay(sliderSaveDelayMs)
+            preferences.saveSpatialSettings(updated)
+        }
+    }
+
     fun resetToNeutral() {
-        val flat = EqualizerPreset.getFactoryPresets().first()
-        selectPreset(flat)
+        cancelPendingSliderSaves()
+        audioEffectManager.setBandsGains(listOf(0, 0, 0, 0, 0))
+        audioEffectManager.setBassBoost(0)
+        audioEffectManager.setTreble(0)
+        audioEffectManager.setVirtualizer(0)
+        testAudioPlayer.setSpatialSettings(SpatialSettings(), _uiState.value.isEnabled)
+        _uiState.value = _uiState.value.copy(
+            activePresetId = "flat",
+            activePresetName = "Normal / Flat",
+            bassBoost = 0,
+            treble = 0,
+            virtualizer = 0,
+            spatialSettings = SpatialSettings()
+        )
+        viewModelScope.launch { preferences.resetAudioTuning() }
     }
 
     fun saveCurrentAsCustomPreset(name: String) {
@@ -524,7 +561,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
-        super.onCleared()
+        cancelPendingSliderSaves()
         testAudioPlayer.release()
+        super.onCleared()
     }
 }
