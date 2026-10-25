@@ -119,10 +119,11 @@ data class AppProfile(
 }
 
 data class AudioEngineCapabilities(
-    val isHardwareEqualizerSupported: Boolean = true,
-    val numberOfBands: Int = 5,
+    // Unknown until an actual, positive-ID audio session has been tested.
+    val isHardwareEqualizerSupported: Boolean = false,
+    val numberOfBands: Int = 0,
     val minGainMilliBel: Short = -1500,
     val maxGainMilliBel: Short = 1500,
-    val isBassBoostSupported: Boolean = true,
-    val isVirtualizerSupported: Boolean = true
+    val isBassBoostSupported: Boolean = false,
+    val isVirtualizerSupported: Boolean = false
 )
