@@ -79,11 +79,11 @@ fun AuraBottomNav(
     val glassStyle = remember(isDark) {
         GlassStyle.clear.then {
             shape(RoundedCornerShape(30.dp))
-            // Transparent tint: the real image behind the bar is blurred and
-            // refracted instead of being replaced with an opaque color.
-            tint(if (isDark) Color.White.copy(alpha = 0.075f) else Color.White.copy(alpha = 0.12f))
-            specularIntensity(0.88f)
-            chromaticAberrationStrength(0.08f)
+            // No solid plate underneath glass: sample the actual scene.
+            backgroundColor(Color.Transparent)
+            tint(if (isDark) Color.White.copy(alpha = 0.045f) else Color.White.copy(alpha = 0.025f))
+            specularIntensity(0.65f)
+            chromaticAberrationStrength(0.045f)
             lightPosition(Alignment.TopStart)
         }
     }
@@ -99,13 +99,14 @@ fun AuraBottomNav(
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(
-                    elevation = 14.dp,
+                    elevation = 4.dp,
                     shape = shape,
-                    ambientColor = Color(0x268274F5),
-                    spotColor = Color(0x408274F5)
+                    ambientColor = Color(0x148274F5),
+                    spotColor = Color(0x248274F5)
                 )
                 .hazeGlass(
-                    input = HazeInput.Backdrop(hazeState),
+                    // Sources, not a fallback screenshot of an opaque container.
+                    input = HazeInput.Sources(hazeState),
                     style = glassStyle
                 )
                 .clip(shape)
@@ -113,9 +114,9 @@ fun AuraBottomNav(
                     width = 1.dp,
                     brush = Brush.linearGradient(
                         listOf(
-                            Color.White.copy(alpha = if (isDark) 0.55f else 0.92f),
-                            Color.White.copy(alpha = 0.22f),
-                            Color(0xFFB3A8F9).copy(alpha = 0.52f)
+                            Color.White.copy(alpha = if (isDark) 0.37f else 0.57f),
+                            Color.White.copy(alpha = 0.09f),
+                            Color(0xFFB3A8F9).copy(alpha = 0.34f)
                         )
                     ),
                     shape = shape
