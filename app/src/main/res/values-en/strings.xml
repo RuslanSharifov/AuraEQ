@@ -119,4 +119,20 @@
     <string name="toast_preset_saved">Profile saved</string>
     <string name="toast_imported">Profiles imported successfully</string>
     <string name="toast_exported">Profiles exported successfully</string>
+
+    <string name="spatial_title">8D · Headphone soundstage</string>
+    <string name="spatial_limit">Real left/right processing works in the AuraEQ player only, not across other apps. Listen with headphones.</string>
+    <string name="spatial_off">Normal</string>
+    <string name="spatial_static">Static 8D</string>
+    <string name="spatial_dynamic">Moving 8D</string>
+    <string name="spatial_left_volume">Left ear · volume</string>
+    <string name="spatial_right_volume">Right ear · volume</string>
+    <string name="spatial_left_tone">Left ear · tone</string>
+    <string name="spatial_right_tone">Right ear · tone</string>
+    <string name="spatial_depth">8D pan depth</string>
+    <string name="spatial_pan">Position · left / right</string>
+    <string name="spatial_speed">One full sweep</string>
+    <string name="spatial_speed_info">Fewer seconds = faster movement between ears</string>
+    <string name="notification_permission_hint">Enable notifications to control active EQ from the notification shade.</string>
+    <string name="notification_permission_allow">Allow</string>
 </resources>
