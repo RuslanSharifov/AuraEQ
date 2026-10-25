@@ -17,6 +17,8 @@ import com.example.data.model.AudioEngineCapabilities
 import com.example.data.model.EqualizerBand
 import com.example.data.model.EqualizerPreset
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,6 +66,21 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<AuraUiState> = _uiState.asStateFlow()
 
     private val activeAppPackages = mutableSetOf<String>()
+
+    // Audio engine updates happen immediately; durable settings are written only after
+    // the user pauses dragging. Avoid launching a DataStore transaction per pixel.
+    private var bandSaveJob: Job? = null
+    private var bassSaveJob: Job? = null
+    private var trebleSaveJob: Job? = null
+    private var virtualizerSaveJob: Job? = null
+    private val sliderSaveDelayMs = 180L
+
+    private fun cancelPendingSliderSaves() {
+        bandSaveJob?.cancel()
+        bassSaveJob?.cancel()
+        trebleSaveJob?.cancel()
+        virtualizerSaveJob?.cancel()
+    }
 
     init {
         // Collect preferences and engine flows
@@ -220,6 +237,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectPreset(preset: EqualizerPreset) {
+        cancelPendingSliderSaves()
         viewModelScope.launch {
             preferences.setCurrentPresetId(preset.id)
             preferences.setCurrentGains(preset.gains)
@@ -241,35 +259,54 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateBandGain(bandIndex: Short, gainMilliBel: Short) {
+        if (bandIndex < 0 || bandIndex.toInt() >= _uiState.value.bands.size) return
         audioEffectManager.setBandGain(bandIndex, gainMilliBel)
-        val currentGains = _uiState.value.bands.map { it.currentGainMilliBel.toInt() }.toMutableList()
-        if (bandIndex < currentGains.size) {
-            currentGains[bandIndex.toInt()] = gainMilliBel.toInt()
+        // Capture each latest change, including a later drag on another frequency.
+        val gains = audioEffectManager.hardwareBands.value
+            .map { it.currentGainMilliBel.toInt() }
+            .toMutableList()
+        if (bandIndex.toInt() < gains.size) {
+            gains[bandIndex.toInt()] = gainMilliBel.toInt()
         }
-        viewModelScope.launch {
+        _uiState.value = _uiState.value.copy(activePresetId = "custom_tuning", bands = audioEffectManager.hardwareBands.value)
+        bandSaveJob?.cancel()
+        bandSaveJob = viewModelScope.launch {
+            delay(sliderSaveDelayMs)
             preferences.setCurrentPresetId("custom_tuning")
-            preferences.setCurrentGains(currentGains)
+            preferences.setCurrentGains(gains)
         }
     }
 
     fun updateBassBoost(value: Int) {
-        audioEffectManager.setBassBoost(value)
-        viewModelScope.launch {
-            preferences.setBassBoost(value)
+        val newValue = value.coerceIn(0, 1000)
+        audioEffectManager.setBassBoost(newValue)
+        _uiState.value = _uiState.value.copy(bassBoost = newValue)
+        bassSaveJob?.cancel()
+        bassSaveJob = viewModelScope.launch {
+            delay(sliderSaveDelayMs)
+            preferences.setBassBoost(newValue)
         }
     }
 
     fun updateTreble(value: Int) {
-        audioEffectManager.setTreble(value)
-        viewModelScope.launch {
-            preferences.setTreble(value)
+        val newValue = value.coerceIn(-1000, 1000)
+        audioEffectManager.setTreble(newValue)
+        _uiState.value = _uiState.value.copy(treble = newValue)
+        trebleSaveJob?.cancel()
+        trebleSaveJob = viewModelScope.launch {
+            delay(sliderSaveDelayMs)
+            preferences.setTreble(newValue)
         }
     }
 
     fun updateVirtualizer(value: Int) {
-        audioEffectManager.setVirtualizer(value)
-        viewModelScope.launch {
-            preferences.setVirtualizer(value)
+        val newValue = value.coerceIn(0, 1000)
+        audioEffectManager.setVirtualizer(newValue)
+        _uiState.value = _uiState.value.copy(virtualizer = newValue)
+        virtualizerSaveJob?.cancel()
+        virtualizerSaveJob = viewModelScope.launch {
+            delay(sliderSaveDelayMs)
+            preferences.setVirtualizer(newValue)
         }
     }
 
