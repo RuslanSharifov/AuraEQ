@@ -58,8 +58,8 @@ class SpatialAudioProcessorTest {
     fun dynamic_pan_moves_right_then_left_over_cycle() {
         val processor = makeProcessor(8000)
         processor.update(SpatialSettings(mode = "dynamic", periodSeconds = 2f, depth = 100), true)
-        val data = ByteBuffer.allocateDirect(8000 * 4).order(ByteOrder.nativeOrder())
-        repeat(8000) {
+        val data = ByteBuffer.allocateDirect(16000 * 4).order(ByteOrder.nativeOrder())
+        repeat(16000) {
             data.putShort(10000)
             data.putShort(10000)
         }
@@ -67,10 +67,10 @@ class SpatialAudioProcessorTest {
         processor.queueInput(data)
         val out = processor.output.order(ByteOrder.nativeOrder())
         // At 1/4 cycle the signal is panned right, at 3/4 cycle it is panned left.
-        val quarterLeft = out.getShort(2000 * 4).toInt()
-        val quarterRight = out.getShort(2000 * 4 + 2).toInt()
-        val threeQuarterLeft = out.getShort(6000 * 4).toInt()
-        val threeQuarterRight = out.getShort(6000 * 4 + 2).toInt()
+        val quarterLeft = out.getShort(4000 * 4).toInt()
+        val quarterRight = out.getShort(4000 * 4 + 2).toInt()
+        val threeQuarterLeft = out.getShort(12000 * 4).toInt()
+        val threeQuarterRight = out.getShort(12000 * 4 + 2).toInt()
         assertTrue(quarterRight > quarterLeft)
         assertTrue(threeQuarterLeft > threeQuarterRight)
     }
