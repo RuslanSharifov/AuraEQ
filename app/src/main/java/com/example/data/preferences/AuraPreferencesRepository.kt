@@ -41,6 +41,7 @@ class AuraPreferencesRepository(private val context: Context) {
         try {
             val obj = JSONObject(prefs[KEY_SPATIAL_SETTINGS] ?: "{}")
             SpatialSettings(
+                is8dEnabled = obj.optBoolean("is8dEnabled", false),
                 mode = obj.optString("mode", "off"),
                 leftPercent = obj.optInt("leftPercent", 100),
                 rightPercent = obj.optInt("rightPercent", 100),
@@ -58,6 +59,7 @@ class AuraPreferencesRepository(private val context: Context) {
     suspend fun saveSpatialSettings(value: SpatialSettings) {
         val state = value.sanitized()
         val obj = JSONObject()
+            .put("is8dEnabled", state.is8dEnabled)
             .put("mode", state.mode)
             .put("leftPercent", state.leftPercent)
             .put("rightPercent", state.rightPercent)
