@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
 import android.net.Uri
+import android.Manifest
+import android.os.Build
+import android.content.pm.PackageManager
 import android.provider.OpenableColumns
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -46,6 +49,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +67,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.model.EqualizerPreset
+import com.example.AuraApplication
+import com.example.ui.components.SpatialControls
 import com.example.ui.components.EqualizerCurveCanvas
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassDialControl
@@ -84,6 +90,20 @@ fun EqualizerScreen(
     val isDark = MaterialTheme.colorScheme.background.red < 0.2f
     var showSaveDialog by remember { mutableStateOf(false) }
     var newPresetName by remember { mutableStateOf("") }
+    var notificationGranted by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < 33 ||
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notificationGranted = granted
+        if (granted && state.isEnabled) {
+            (context.applicationContext as? AuraApplication)?.eqNotification?.update(true)
+        }
+    }
 
     // System Document Picker for audio files
     val audioPickerLauncher = rememberLauncherForActivityResult(
@@ -352,6 +372,28 @@ fun EqualizerScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Real per-ear PCM control for the built-in player.
+        SpatialControls(
+            settings = state.spatialSettings,
+            enabled = state.isEnabled,
+            onChange = viewModel::setSpatialSettings
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (state.isEnabled && !notificationGranted && Build.VERSION.SDK_INT >= 33) {
+            GlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(stringResource(R.string.notification_permission_hint))
+                    Button(onClick = {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }) {
+                        Text(stringResource(R.string.notification_permission_allow))
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         // Integrated Test Audio Player Section
         GlassCard(
