@@ -101,8 +101,15 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Reassert EQ parameters when returning from Spotify/Android audio settings.
+        (applicationContext as? AuraApplication)?.audioEffectManager?.refreshActiveSessions()
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleIncomingSessionIntent(intent)
     }
 
@@ -111,7 +118,9 @@ class MainActivity : ComponentActivity() {
         val sessionId = intent.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION, -1)
         val packageName = intent.getStringExtra(AudioEffect.EXTRA_PACKAGE_NAME)
         if (sessionId > 0) {
-            (applicationContext as? AuraApplication)?.audioEffectManager?.attachSession(sessionId, packageName)
+            val app = applicationContext as? AuraApplication
+            app?.audioEffectManager?.attachSession(sessionId, packageName)
+            app?.onAudioSessionOpened(sessionId, packageName)
         }
     }
 
