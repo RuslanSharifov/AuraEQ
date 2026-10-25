@@ -273,6 +273,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             audioEffectManager.setBassBoost(preset.bassBoost)
             audioEffectManager.setTreble(preset.treble)
             audioEffectManager.setVirtualizer(preset.virtualizer)
+            testAudioPlayer.setVirtualizerStrength(preset.virtualizer, _uiState.value.isEnabled)
         }
     }
 
@@ -326,6 +327,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun updateVirtualizer(value: Int) {
         val newValue = value.coerceIn(0, 1000)
         audioEffectManager.setVirtualizer(newValue)
+        testAudioPlayer.setVirtualizerStrength(newValue, _uiState.value.isEnabled)
         _uiState.value = _uiState.value.copy(virtualizer = newValue)
         virtualizerSaveJob?.cancel()
         virtualizerSaveJob = viewModelScope.launch {
