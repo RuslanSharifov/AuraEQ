@@ -66,6 +66,7 @@ import com.example.data.model.EqualizerPreset
 import com.example.ui.components.EqualizerCurveCanvas
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassDialControl
+import com.example.ui.components.SystemVolumeControl
 import com.example.ui.components.VerticalBandSlider
 import com.example.ui.theme.AuraAccent
 import com.example.ui.theme.AuraGreenSuccess
@@ -145,6 +146,12 @@ fun EqualizerScreen(
         }
 
         Spacer(modifier = Modifier.height(10.dp))
+
+        // Independent control for the phone's real media stream volume.
+        // It stays enabled even when the EQ engine is switched off.
+        SystemVolumeControl(modifier = Modifier.fillMaxWidth())
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // Equalizer Card (Visual Curve + Vertical Band Sliders)
         GlassCard(
