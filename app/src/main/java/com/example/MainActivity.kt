@@ -17,7 +17,10 @@ import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -50,6 +53,8 @@ import com.example.ui.theme.AuraPastelLavender
 import com.example.ui.theme.AuraSoftCyan
 import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.AuraViewModel
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -151,51 +156,81 @@ fun AuraMainScreen(
         )
     }
 
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundBrush),
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            AuraBottomNav(
-                currentTab = currentTab,
-                hapticEnabled = state.hapticEnabled,
-                onTabSelected = { currentTab = it }
-            )
-        }
-    ) { innerPadding ->
-        Column(
+    val hazeState = rememberHazeState()
+
+    // Draw the gradient, ambient lights and screen content into a Haze source.
+    // The bottom bar is then drawn as an overlay that refracts those real pixels.
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .windowInsetsPadding(WindowInsets.statusBars)
+                .hazeSource(hazeState)
+                .background(backgroundBrush)
         ) {
-            // Persistent Glass Top Bar
-            AuraTopBar(
-                isEnabled = state.isEnabled,
-                deviceType = state.currentDeviceType,
-                deviceName = state.currentDeviceName,
-                activePresetName = state.activePresetName,
-                activeSessionCount = state.activeSessionCount,
-                hapticEnabled = state.hapticEnabled,
-                onTogglePower = { viewModel.toggleMasterPower() }
+            // Layered light patches give the glass something to visibly bend.
+            Box(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.BottomEnd)
+                    .offset(x = 85.dp, y = 105.dp)
+                    .size(330.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = if (isDark) listOf(Color(0x555C58CB), Color.Transparent)
+                            else listOf(Color(0x99D7C6FF), Color.Transparent)
+                        )
+                    )
             )
+            Box(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.BottomStart)
+                    .offset(x = (-100).dp, y = 92.dp)
+                    .size(280.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = if (isDark) listOf(Color(0x4462D4DF), Color.Transparent)
+                            else listOf(Color(0x99B4E5FF), Color.Transparent)
+                        )
+                    )
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+            ) {
+                AuraTopBar(
+                    isEnabled = state.isEnabled,
+                    deviceType = state.currentDeviceType,
+                    deviceName = state.currentDeviceName,
+                    activePresetName = state.activePresetName,
+                    activeSessionCount = state.activeSessionCount,
+                    hapticEnabled = state.hapticEnabled,
+                    onTogglePower = { viewModel.toggleMasterPower() }
+                )
 
-            // Screen content
-            Box(modifier = Modifier.fillMaxSize()) {
-                Crossfade(
-                    targetState = currentTab,
-                    label = "tab_crossfade"
-                ) { tab ->
-                    when (tab) {
-                        AuraTab.EQUALIZER -> EqualizerScreen(state = state, viewModel = viewModel)
-                        AuraTab.APPS -> AppsScreen(state = state, viewModel = viewModel)
-                        AuraTab.PRESETS -> PresetsScreen(state = state, viewModel = viewModel)
-                        AuraTab.SETTINGS -> SettingsScreen(state = state, viewModel = viewModel)
+                // Leave touch/scroll clearance for the floating nav.
+                Box(modifier = Modifier.weight(1f).padding(bottom = 87.dp)) {
+                    Crossfade(
+                        targetState = currentTab,
+                        label = "tab_crossfade"
+                    ) { tab ->
+                        when (tab) {
+                            AuraTab.EQUALIZER -> EqualizerScreen(state = state, viewModel = viewModel)
+                            AuraTab.APPS -> AppsScreen(state = state, viewModel = viewModel)
+                            AuraTab.PRESETS -> PresetsScreen(state = state, viewModel = viewModel)
+                            AuraTab.SETTINGS -> SettingsScreen(state = state, viewModel = viewModel)
+                        }
                     }
                 }
             }
         }
+
+        AuraBottomNav(
+            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+            currentTab = currentTab,
+            hapticEnabled = state.hapticEnabled,
+            hazeState = hazeState,
+            onTabSelected = { currentTab = it }
+        )
     }
+
 }
