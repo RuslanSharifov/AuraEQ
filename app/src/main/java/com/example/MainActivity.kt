@@ -1,6 +1,8 @@
 package com.example
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.Resources
 import android.content.res.Configuration
 import android.media.audiofx.AudioEffect
 import android.os.Build
@@ -8,6 +10,7 @@ import android.os.Bundle
 import android.os.LocaleList
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -63,12 +66,20 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-            // Update app language dynamically
+            // Keep the Activity in the ContextWrapper chain. A bare Context returned
+            // by createConfigurationContext() does NOT expose ActivityResultRegistryOwner,
+            // causing rememberLauncherForActivityResult() to crash at first launch.
             val localizedContext = remember(state.language) {
-                updateLocale(this, state.language)
+                val languageResources = updateLocale(this, state.language).resources
+                object : ContextWrapper(this@MainActivity) {
+                    override fun getResources(): Resources = languageResources
+                }
             }
 
-            CompositionLocalProvider(LocalContext provides localizedContext) {
+            CompositionLocalProvider(
+                LocalContext provides localizedContext,
+                LocalActivityResultRegistryOwner provides this@MainActivity
+            ) {
                 MyApplicationTheme(themeMode = state.themeMode) {
                     AuraMainScreen(
                         viewModel = viewModel
