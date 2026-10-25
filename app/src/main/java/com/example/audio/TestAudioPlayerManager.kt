@@ -11,6 +11,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,7 +40,7 @@ class TestAudioPlayerManager(
 ) {
     private val TAG = "TestAudioPlayer"
     private var exoPlayer: ExoPlayer? = null
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var progressJob: Job? = null
 
     private val _state = MutableStateFlow(TestPlayerState())
@@ -78,19 +81,19 @@ class TestAudioPlayerManager(
                 })
             }
 
-            // Prepare default harmonic reference track in cache
-            val sampleFile = getOrCreateReferenceWav()
-            val mediaItem = MediaItem.fromUri(Uri.fromFile(sampleFile))
-            exoPlayer?.setMediaItem(mediaItem)
-            exoPlayer?.prepare()
+            // Synthesizing 441,000 samples can stall startup: perform file generation off the UI thread.
+            scope.launch {
+                val sampleFile = withContext(Dispatchers.IO) { getOrCreateReferenceWav() }
+                val player = exoPlayer ?: return@launch
+                player.setMediaItem(MediaItem.fromUri(Uri.fromFile(sampleFile)))
+                player.prepare()
 
-            val sessionId = exoPlayer?.audioSessionId ?: 0
-            _state.value = _state.value.copy(
-                audioSessionId = sessionId,
-                currentTitle = "Harmonic Reference Track"
-            )
-            if (sessionId > 0) {
-                onSessionReady(sessionId)
+                val sessionId = player.audioSessionId
+                _state.value = _state.value.copy(
+                    audioSessionId = sessionId,
+                    currentTitle = "Harmonic Reference Track"
+                )
+                if (sessionId > 0) onSessionReady(sessionId)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing ExoPlayer: ${e.message}", e)
@@ -140,8 +143,12 @@ class TestAudioPlayerManager(
     }
 
     fun loadReferenceTrack() {
-        val sampleFile = getOrCreateReferenceWav()
-        playCustomUri(Uri.fromFile(sampleFile), "Harmonic Reference Track")
+        scope.launch {
+            val sampleFile = withContext(Dispatchers.IO) { getOrCreateReferenceWav() }
+            if (exoPlayer != null) {
+                playCustomUri(Uri.fromFile(sampleFile), "Harmonic Reference Track")
+            }
+        }
     }
 
     private fun startProgressTracking() {
@@ -228,6 +235,7 @@ class TestAudioPlayerManager(
 
     fun release() {
         progressJob?.cancel()
+        scope.cancel()
         try {
             exoPlayer?.stop()
             exoPlayer?.release()
