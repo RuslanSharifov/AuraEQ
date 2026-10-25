@@ -13,6 +13,7 @@ import com.example.data.model.EqualizerPreset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -52,7 +53,7 @@ class AuraPreferencesRepository(private val context: Context) {
         } catch (_: Exception) {
             SpatialSettings()
         }
-    }
+    }.distinctUntilChanged()
 
     suspend fun saveSpatialSettings(value: SpatialSettings) {
         val state = value.sanitized()
@@ -83,7 +84,7 @@ class AuraPreferencesRepository(private val context: Context) {
 
     val isEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_ENABLED] ?: false
-    }
+    }.distinctUntilChanged()
 
     val currentPresetIdFlow: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[KEY_CURRENT_PRESET_ID] ?: "flat"
@@ -96,19 +97,19 @@ class AuraPreferencesRepository(private val context: Context) {
         } else {
             raw.split(",").mapNotNull { it.trim().toIntOrNull() }
         }
-    }
+    }.distinctUntilChanged()
 
     val bassBoostFlow: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[KEY_BASS_BOOST] ?: 0
-    }
+    }.distinctUntilChanged()
 
     val trebleFlow: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[KEY_TREBLE] ?: 0
-    }
+    }.distinctUntilChanged()
 
     val virtualizerFlow: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[KEY_VIRTUALIZER] ?: 0
-    }
+    }.distinctUntilChanged()
 
     val customPresetsFlow: Flow<List<EqualizerPreset>> = context.dataStore.data.map { prefs ->
         val raw = prefs[KEY_CUSTOM_PRESETS] ?: ""
