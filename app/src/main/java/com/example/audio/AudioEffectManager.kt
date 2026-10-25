@@ -91,8 +91,18 @@ class AudioEffectManager(private val context: Context) {
     }
 
     init {
-        detectAudioRoute()
-        audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+        // Route discovery and callbacks vary across OEM audio implementations.
+        // A failure here must not crash the entire application during startup.
+        try {
+            detectAudioRoute()
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Audio device route detection unavailable", e)
+        }
+        try {
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Audio device change callback unavailable", e)
+        }
         // Do not probe deprecated global session 0; await a valid playback session.
     }
 
