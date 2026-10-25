@@ -180,7 +180,11 @@ class AudioEffectManager(private val context: Context) {
                     )
                 )
             }
-            _hardwareBands.value = bands
+            // Preserve USER band levels. Probing a session must not zero existing
+            // sliders (and treble is not a saved/user band level).
+            _hardwareBands.value = bands.mapIndexed { i, band ->
+                band.copy(currentGainMilliBel = bandGains.getOrNull(i) ?: 0)
+            }
 
             // Check BassBoost
             var bbSupported = false
@@ -221,7 +225,9 @@ class AudioEffectManager(private val context: Context) {
                 EqualizerBand(3, 3600, -1500, 1500, 0),
                 EqualizerBand(4, 14000, -1500, 1500, 0)
             )
-            _hardwareBands.value = fallbackBands
+            _hardwareBands.value = fallbackBands.mapIndexed { i, band ->
+                band.copy(currentGainMilliBel = bandGains.getOrNull(i) ?: 0)
+            }
             _capabilities.value = AudioEngineCapabilities(
                 isHardwareEqualizerSupported = false,
                 numberOfBands = 5,
@@ -405,42 +411,40 @@ class AudioEffectManager(private val context: Context) {
         }
     }
 
+    /**
+     * Keep EQ sliders as independent USER gains. Treble changes the hardware
+     * output on the final two bands but is NEVER stored in a band slider.
+     * Previously, editing 60/230/910Hz copied the boosted 3.6k/14k values
+     * back into base gains and reapplied Treble, causing positive feedback.
+     */
     private fun applyGainsWithTreble() {
         val totalBands = _hardwareBands.value.size.coerceAtLeast(bandGains.size)
-        val minGain = _capabilities.value.minGainMilliBel
-        val maxGain = _capabilities.value.maxGainMilliBel
-
-        // Calculate treble influence: shifts the highest band(s) proportionally
-        // trebleValue is -1000..1000. Scale to ±600 mB max addition
-        val trebleDelta = ((trebleValue / 1000.0f) * 600).toInt().toShort()
-
+        val minGain = _capabilities.value.minGainMilliBel.toInt()
+        val maxGain = _capabilities.value.maxGainMilliBel.toInt()
         val updatedBands = mutableListOf<EqualizerBand>()
         for (i in 0 until totalBands) {
-            val baseGain = bandGains.getOrNull(i) ?: 0.toShort()
-            val extraTreble = if (i >= (totalBands - 2).coerceAtLeast(1)) {
-                // Apply higher weight to very top band, half weight to second to top
-                if (i == totalBands - 1) trebleDelta else (trebleDelta / 2).toShort()
-            } else {
-                0.toShort()
-            }
-            val effectiveGain = (baseGain + extraTreble).coerceIn(minGain.toInt(), maxGain.toInt()).toShort()
-
+            val baseGain = bandGains.getOrNull(i)?.toInt() ?: 0
+            val effective = EqBandTuning.effectiveGain(
+                baseGain, trebleValue, i, totalBands, minGain, maxGain
+            )
             activeEffectSessions.values.forEach { session ->
                 try {
-                    session.equalizer?.setBandLevel(i.toShort(), effectiveGain)
+                    session.equalizer?.let { eq ->
+                        if (i < eq.numberOfBands.toInt()) eq.setBandLevel(i.toShort(), effective)
+                    }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error setting band $i to $effectiveGain", e)
+                    Log.w(TAG, "Error setting band $i to $effective", e)
                 }
             }
-
-            val existing = _hardwareBands.value.getOrNull(i)
-            if (existing != null) {
-                updatedBands.add(existing.copy(currentGainMilliBel = effectiveGain))
+            _hardwareBands.value.getOrNull(i)?.let { existing ->
+                updatedBands.add(
+                    existing.copy(currentGainMilliBel = baseGain.coerceIn(
+                        existing.minMilliBel.toInt(), existing.maxMilliBel.toInt()
+                    ).toShort())
+                )
             }
         }
-        if (updatedBands.isNotEmpty()) {
-            _hardwareBands.value = updatedBands
-        }
+        if (updatedBands.isNotEmpty()) _hardwareBands.value = updatedBands
     }
 
     private fun applyCurrentParametersToSession(session: SessionEffects) {
@@ -450,16 +454,11 @@ class AudioEffectManager(private val context: Context) {
                 val numBands = eq.numberOfBands.toInt()
                 val minGain = _capabilities.value.minGainMilliBel
                 val maxGain = _capabilities.value.maxGainMilliBel
-                val trebleDelta = ((trebleValue / 1000.0f) * 600).toInt().toShort()
-
                 for (i in 0 until numBands) {
-                    val baseGain = bandGains.getOrNull(i) ?: 0.toShort()
-                    val extraTreble = if (i >= (numBands - 2).coerceAtLeast(1)) {
-                        if (i == numBands - 1) trebleDelta else (trebleDelta / 2).toShort()
-                    } else {
-                        0.toShort()
-                    }
-                    val effective = (baseGain + extraTreble).coerceIn(minGain.toInt(), maxGain.toInt()).toShort()
+                    val effective = EqBandTuning.effectiveGain(
+                        bandGains.getOrNull(i)?.toInt() ?: 0,
+                        trebleValue, i, numBands, minGain.toInt(), maxGain.toInt()
+                    )
                     eq.setBandLevel(i.toShort(), effective)
                 }
             }
