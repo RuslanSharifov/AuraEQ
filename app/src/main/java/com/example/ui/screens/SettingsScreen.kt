@@ -546,7 +546,7 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(90.dp))
+        Spacer(modifier = Modifier.height(144.dp))
     }
 
     // Privacy Dialog
