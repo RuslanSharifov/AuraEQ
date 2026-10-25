@@ -145,4 +145,9 @@
     <string name="spatial_enabled">8D effect on</string>
     <string name="spatial_disabled">8D effect off</string>
     <string name="spatial_reset">Reset</string>
+
+    <string name="app_global_eq">Use global EQ settings</string>
+    <string name="app_eq_applies">EQ enabled for this app (when an audio session is available)</string>
+    <string name="app_eq_excluded">Excluded: AuraEQ effects disabled for this app</string>
+    <string name="app_eq_platform_notice">Android allows EQ, Bass and Virtualizer only for sessions exposed by the player. Full moving left-right 8D cannot be applied to Spotify or all apps without system-level audio access.</string>
 </resources>
