@@ -14,6 +14,7 @@ import kotlin.math.sin
 
 /** Processed locally on PCM from AuraEQ's own player, not other apps or system-wide audio. */
 data class SpatialSettings(
+    val is8dEnabled: Boolean = false,
     val mode: String = "off", // off, static, dynamic
     val leftPercent: Int = 100,
     val rightPercent: Int = 100,
@@ -52,8 +53,8 @@ class SpatialAudioProcessor : BaseAudioProcessor() {
 
     fun update(settings: SpatialSettings, enabled: Boolean) {
         options = settings.sanitized()
-        active = enabled
-        if (!enabled) clearState()
+        active = enabled && options.is8dEnabled
+        if (!active) clearState()
     }
 
     fun clearState() {
