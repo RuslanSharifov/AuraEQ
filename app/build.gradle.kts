@@ -104,6 +104,9 @@ dependencies {
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.media3.exoplayer)
   implementation(libs.androidx.media3.common)
+  // Genuine sampled-backdrop refraction/blur for the floating glass navigation bar.
+  implementation("dev.chrisbanes.haze:haze:2.0.1")
+  implementation("dev.chrisbanes.haze:haze-glass:2.0.1")
   // implementation(libs.androidx.room.ktx)
   // implementation(libs.androidx.room.runtime)
   // implementation(libs.coil.compose)
