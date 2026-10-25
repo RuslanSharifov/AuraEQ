@@ -27,7 +27,15 @@ class AudioEffectManager(private val context: Context) {
     val capabilities: StateFlow<AudioEngineCapabilities> = _capabilities.asStateFlow()
 
     // Real hardware bands exposed to UI
-    private val _hardwareBands = MutableStateFlow<List<EqualizerBand>>(emptyList())
+    private val _hardwareBands = MutableStateFlow<List<EqualizerBand>>(
+        listOf(
+            EqualizerBand(0, 60, -1500, 1500, 0),
+            EqualizerBand(1, 230, -1500, 1500, 0),
+            EqualizerBand(2, 910, -1500, 1500, 0),
+            EqualizerBand(3, 3600, -1500, 1500, 0),
+            EqualizerBand(4, 14000, -1500, 1500, 0)
+        )
+    )
     val hardwareBands: StateFlow<List<EqualizerBand>> = _hardwareBands.asStateFlow()
 
     // Current output device route
@@ -206,7 +214,7 @@ class AudioEffectManager(private val context: Context) {
                 eq.enabled = isEnabled
                 sessionEffects.equalizer = eq
                 // Re-verify bands with this active session
-                if (_hardwareBands.value.isEmpty() || _hardwareBands.value.size != eq.numberOfBands.toInt()) {
+                if (!_capabilities.value.isHardwareEqualizerSupported || _hardwareBands.value.size != eq.numberOfBands.toInt()) {
                     probeHardwareCapabilities(sessionId)
                 }
             }
