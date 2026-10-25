@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,7 +51,11 @@ fun SystemVolumeControl(modifier: Modifier = Modifier) {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     val minVolume = remember(audioManager) {
-        runCatching { audioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC) }.getOrDefault(0)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            runCatching { audioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC) }.getOrDefault(0)
+        } else {
+            0
+        }
     }
     val maxVolume = remember(audioManager) {
         runCatching { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
