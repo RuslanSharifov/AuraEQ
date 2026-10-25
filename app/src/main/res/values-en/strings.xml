@@ -135,4 +135,10 @@
     <string name="spatial_speed_info">Fewer seconds = faster movement between ears</string>
     <string name="notification_permission_hint">Enable notifications to control active EQ from the notification shade.</string>
     <string name="notification_permission_allow">Allow</string>
+
+    <string name="spotify_session_no_control">Session found · EQ waiting</string>
+    <string name="spotify_connected_detail">Spotify published an audio session; AuraEQ controls Android EQ for it. This is not the 8D processing status.</string>
+    <string name="spotify_no_control_detail">Spotify session detected, but Android EQ control is unavailable. Turn off Spotify's built-in equalizer and try reconnecting.</string>
+    <string name="spotify_no_session_detail">No Spotify audio session was delivered. Start playback, then open AuraEQ via Spotify Playback → Equalizer. Android does not expose arbitrary player session IDs.</string>
+    <string name="spotify_retry_session">Reconnect audio session</string>
 </resources>
