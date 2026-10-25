@@ -351,6 +351,15 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Reset just the 8D / left-right headphone controls, without changing EQ bands. */
+    fun resetSpatialSettings() {
+        spatialSaveJob?.cancel()
+        val defaults = SpatialSettings()
+        _uiState.value = _uiState.value.copy(spatialSettings = defaults)
+        testAudioPlayer.setSpatialSettings(defaults, _uiState.value.isEnabled)
+        viewModelScope.launch { preferences.saveSpatialSettings(defaults) }
+    }
+
     fun resetToNeutral() {
         cancelPendingSliderSaves()
         audioEffectManager.setBandsGains(listOf(0, 0, 0, 0, 0))
