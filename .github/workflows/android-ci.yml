@@ -64,6 +64,15 @@ jobs:
 
       # A successful APK build does not prove that MainActivity launches.
       # Check a real Android runtime and retain a logcat dump for crash diagnosis.
+      - name: Enable KVM for Android emulator
+        shell: bash
+        run: |
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod 666 /dev/kvm
+          else
+            echo "KVM not exposed by runner; emulator may need software acceleration."
+          fi
+
       - name: Android emulator first-launch smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -71,6 +80,8 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          disk-size: 2048M
+          ram-size: 1536M
           disable-animations: true
           script: |
             set -e
