@@ -377,7 +377,8 @@ fun EqualizerScreen(
         SpatialControls(
             settings = state.spatialSettings,
             enabled = state.isEnabled,
-            onChange = viewModel::setSpatialSettings
+            onChange = viewModel::setSpatialSettings,
+            onReset = viewModel::resetSpatialSettings
         )
         Spacer(modifier = Modifier.height(12.dp))
 
