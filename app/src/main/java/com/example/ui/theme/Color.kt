@@ -16,12 +16,12 @@ val AuraCardBorderLight = Color(0x66FFFFFF)
 val AuraGlassSurfaceLight = Color(0xCCFFFFFF)
 
 // Dark Glassmorphism Palette
-val AuraBgDark = Color(0xFF0F121E)
-val AuraSurfaceDark = Color(0xFF181C2E)
-val AuraGlassSurfaceDark = Color(0xCC181C2E)
+val AuraBgDark = Color(0xFF20283F)
+val AuraSurfaceDark = Color(0xFF2A3650)
+val AuraGlassSurfaceDark = Color(0xB3354362)
 val AuraTextPrimaryDark = Color(0xFFF0F4FF)
-val AuraTextSecondaryDark = Color(0xFF8E98B0)
-val AuraCardBorderDark = Color(0x26FFFFFF)
+val AuraTextSecondaryDark = Color(0xFFADB8D3)
+val AuraCardBorderDark = Color(0x63DCE4FF)
 val AuraAccentDark = Color(0xFF9E90FF)
 
 // Status & Indicators
