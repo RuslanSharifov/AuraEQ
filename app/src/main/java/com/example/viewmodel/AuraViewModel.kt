@@ -408,6 +408,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val pm = getApplication<Application>().packageManager
             val savedMap = preferences.appProfilesFlow.first()
+            val activePackagesSnapshot = activeAppPackages.toSet()
 
             val discovered = mutableListOf<AppProfile>()
 
@@ -420,7 +421,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 if (pkg != getApplication<Application>().packageName) {
                     val label = resolveInfo.loadLabel(pm).toString()
                     val saved = savedMap[pkg]
-                    val isSessionActive = activeAppPackages.contains(pkg)
+                    val isSessionActive = activePackagesSnapshot.contains(pkg)
                     discovered.add(
                         AppProfile(
                             packageName = pkg,
@@ -472,18 +473,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // If empty (e.g. fresh emulator without other apps), provide curated music apps
-            if (discovered.isEmpty()) {
-                val sampleApps = listOf(
-                    AppProfile("com.spotify.music", "Spotify", "deep_bass", isEnabled = true),
-                    AppProfile("com.google.android.apps.youtube.music", "YouTube Music", "rock", isEnabled = true),
-                    AppProfile("com.google.android.youtube", "YouTube", "flat", isEnabled = true),
-                    AppProfile("org.videolan.vlc", "VLC", "movie", isEnabled = true),
-                    AppProfile("com.soundcloud.android", "SoundCloud", "electronic", isEnabled = true)
-                )
-                discovered.addAll(sampleApps)
-            }
-
+            // Empty states should be truthful; never display apps that are not installed.
             _uiState.value = _uiState.value.copy(installedApps = discovered.distinctBy { it.packageName })
         }
     }
