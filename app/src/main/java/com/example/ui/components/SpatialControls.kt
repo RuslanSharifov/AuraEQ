@@ -13,6 +13,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -28,20 +30,46 @@ fun SpatialControls(
     settings: SpatialSettings,
     enabled: Boolean,
     onChange: (SpatialSettings) -> Unit,
+    onReset: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val controlsEnabled = enabled && settings.is8dEnabled
     GlassCard(modifier = modifier.fillMaxWidth(), cornerRadius = 26.dp, elevation = 4.dp) {
         Column(Modifier.padding(horizontal = 15.dp, vertical = 14.dp)) {
-            Text(
-                stringResource(R.string.spatial_title),
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                stringResource(R.string.spatial_limit),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Column {
+                    Text(
+                        stringResource(R.string.spatial_title),
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        stringResource(if (settings.is8dEnabled) R.string.spatial_enabled else R.string.spatial_disabled),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+                Switch(
+                    modifier = Modifier.testTag("spatial_effect_toggle"),
+                    checked = settings.is8dEnabled,
+                    enabled = enabled,
+                    onCheckedChange = { onChange(settings.copy(is8dEnabled = it)) }
+                )
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.spatial_limit),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    modifier = Modifier.testTag("spatial_reset"),
+                    onClick = onReset
+                ) { Text(stringResource(R.string.spatial_reset)) }
+            }
             Spacer(Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -55,7 +83,7 @@ fun SpatialControls(
                     Button(
                         modifier = Modifier.weight(1f).testTag("spatial_mode_$mode"),
                         onClick = { onChange(settings.copy(mode = mode)) },
-                        enabled = enabled,
+                        enabled = controlsEnabled,
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 2.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (settings.mode == mode) AuraAccent
@@ -68,31 +96,31 @@ fun SpatialControls(
             }
 
             EarSlider(stringResource(R.string.spatial_left_volume), settings.leftPercent, 0, 100, "%",
-                enabled, "spatial_left_volume") { onChange(settings.copy(leftPercent = it)) }
+                controlsEnabled, "spatial_left_volume") { onChange(settings.copy(leftPercent = it)) }
             EarSlider(stringResource(R.string.spatial_right_volume), settings.rightPercent, 0, 100, "%",
-                enabled, "spatial_right_volume") { onChange(settings.copy(rightPercent = it)) }
+                controlsEnabled, "spatial_right_volume") { onChange(settings.copy(rightPercent = it)) }
             EarSlider(stringResource(R.string.spatial_left_tone), settings.leftTone, -100, 100, "",
-                enabled, "spatial_left_tone") { onChange(settings.copy(leftTone = it)) }
+                controlsEnabled, "spatial_left_tone") { onChange(settings.copy(leftTone = it)) }
             EarSlider(stringResource(R.string.spatial_right_tone), settings.rightTone, -100, 100, "",
-                enabled, "spatial_right_tone") { onChange(settings.copy(rightTone = it)) }
+                controlsEnabled, "spatial_right_tone") { onChange(settings.copy(rightTone = it)) }
 
             if (settings.mode != "off") {
                 EarSlider(
                     stringResource(R.string.spatial_depth), settings.depth, 0, 100, "%",
-                    enabled, "spatial_depth"
+                    controlsEnabled, "spatial_depth"
                 ) { onChange(settings.copy(depth = it)) }
             }
             if (settings.mode == "static") {
                 EarSlider(
                     stringResource(R.string.spatial_pan), settings.staticPan, -100, 100, "",
-                    enabled, "spatial_pan"
+                    controlsEnabled, "spatial_pan"
                 ) { onChange(settings.copy(staticPan = it)) }
             }
             if (settings.mode == "dynamic") {
                 EarSlider(
                     stringResource(R.string.spatial_speed),
                     settings.periodSeconds.toInt(), 2, 30,
-                    "s", enabled, "spatial_speed"
+                    "s", controlsEnabled, "spatial_speed"
                 ) { onChange(settings.copy(periodSeconds = it.toFloat())) }
                 Text(
                     stringResource(R.string.spatial_speed_info),
