@@ -1,6 +1,10 @@
 package com.example
 
 import android.content.Context
+import android.app.Activity
+import android.media.projection.MediaProjectionManager
+import androidx.core.content.ContextCompat
+import com.example.audio.External8dCaptureService
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
@@ -70,6 +74,40 @@ class MainActivity : ComponentActivity() {
                 app?.eqNotification?.update(viewModel.uiState.value.isEnabled)
             }
         }
+
+    private val audioPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) launchExternalCaptureConsent()
+        }
+
+    private val projectionConsentLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+                val command = android.content.Intent(this, External8dCaptureService::class.java)
+                    .setAction(External8dCaptureService.ACTION_START)
+                    .putExtra(External8dCaptureService.EXTRA_RESULT_CODE, result.resultCode)
+                    .putExtra(External8dCaptureService.EXTRA_RESULT_DATA, result.data)
+                ContextCompat.startForegroundService(this, command)
+            }
+        }
+
+    /** User-triggered consent; never auto-start capture without visible approval. */
+    fun requestExternal8dCapture() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        } else launchExternalCaptureConsent()
+    }
+
+    private fun launchExternalCaptureConsent() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionConsentLauncher.launch(manager.createScreenCaptureIntent())
+    }
+
+    fun stopExternal8dCapture() {
+        External8dCaptureService.stop(this)
+    }
 
     override fun onStart() {
         super.onStart()
