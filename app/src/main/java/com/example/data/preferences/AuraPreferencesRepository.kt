@@ -11,6 +11,7 @@ import com.example.data.model.AudioDeviceType
 import com.example.data.model.EqualizerPreset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -220,11 +221,10 @@ class AuraPreferencesRepository(private val context: Context) {
 
     suspend fun exportJson(): String {
         val obj = JSONObject()
-        // serialize all preferences
-        context.dataStore.data.map { prefs ->
-            prefs.asMap().forEach { (key, value) ->
-                obj.put(key.name, value)
-            }
+        // Read a DataStore snapshot. Calling map() without collecting the Flow never runs it.
+        val prefs = context.dataStore.data.first()
+        prefs.asMap().forEach { (key, value) ->
+            obj.put(key.name, value)
         }
         return obj.toString(2)
     }
