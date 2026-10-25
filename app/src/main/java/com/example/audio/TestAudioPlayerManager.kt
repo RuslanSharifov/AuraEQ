@@ -45,6 +45,12 @@ class TestAudioPlayerManager(
     private val TAG = "TestAudioPlayer"
     private var exoPlayer: ExoPlayer? = null
     private val spatialProcessor = SpatialAudioProcessor()
+    private val surround3dProcessor = Stereo3DAudioProcessor()
+
+    /** This local stereo widening works even if the device has no hardware 3D effect. */
+    fun setVirtualizerStrength(strength: Int, enabled: Boolean) {
+        surround3dProcessor.update(strength, enabled)
+    }
 
     fun setSpatialSettings(settings: SpatialSettings, enabled: Boolean) {
         spatialProcessor.update(settings, enabled)
@@ -52,6 +58,7 @@ class TestAudioPlayerManager(
 
     fun clearAudioEffects() {
         spatialProcessor.update(SpatialSettings(), false)
+        surround3dProcessor.update(0, false)
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var progressJob: Job? = null
@@ -76,7 +83,7 @@ class TestAudioPlayerManager(
                     enableAudioOutputPlaybackParams: Boolean
                 ): AudioSink {
                     return DefaultAudioSink.Builder(context)
-                        .setAudioProcessors(arrayOf(spatialProcessor))
+                        .setAudioProcessors(arrayOf(spatialProcessor, surround3dProcessor))
                         .build()
                 }
             }
