@@ -119,4 +119,20 @@
     <string name="toast_preset_saved">Profil saxlanıldı</string>
     <string name="toast_imported">Profillər uğurla idxal edildi</string>
     <string name="toast_exported">Profillər ixrac edildi</string>
+
+    <string name="spatial_title">8D · Qulaqcıq səhnəsi</string>
+    <string name="spatial_limit">Real sol/sağ səs emalı yalnız AuraEQ pleyerində işləyir. Digər tətbiqlərin stereo səsini dəyişmir. Qulaqcıqla dinlə.</string>
+    <string name="spatial_off">Adi</string>
+    <string name="spatial_static">Sabit 8D</string>
+    <string name="spatial_dynamic">Hərəkətli 8D</string>
+    <string name="spatial_left_volume">Sol qulaq · səs</string>
+    <string name="spatial_right_volume">Sağ qulaq · səs</string>
+    <string name="spatial_left_tone">Sol qulaq · ton</string>
+    <string name="spatial_right_tone">Sağ qulaq · ton</string>
+    <string name="spatial_depth">8D təsir dərinliyi</string>
+    <string name="spatial_pan">Mövqe · sol / sağ</string>
+    <string name="spatial_speed">Tam keçid dövrü</string>
+    <string name="spatial_speed_info">Kiçik saniyə = daha sürətli sol–sağ keçid</string>
+    <string name="notification_permission_hint">Aktiv EQ bildirişindən idarə üçün bildiriş icazəsi ver.</string>
+    <string name="notification_permission_allow">İcazə ver</string>
 </resources>
