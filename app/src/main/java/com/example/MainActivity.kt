@@ -94,6 +94,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        if (isFinishing) {
+            (applicationContext as? AuraApplication)?.exitAndReset()
+        }
+        super.onDestroy()
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         handleIncomingSessionIntent(intent)
