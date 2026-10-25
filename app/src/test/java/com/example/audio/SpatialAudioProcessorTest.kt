@@ -35,6 +35,37 @@ class SpatialAudioProcessorTest {
     }
 
     @Test
+    fun eight_d_off_switch_bypasses_all_channel_changes() {
+        val processor = makeProcessor()
+        processor.update(
+            SpatialSettings(
+                is8dEnabled = false, mode = "dynamic",
+                leftPercent = 0, rightPercent = 30,
+                leftTone = 80, rightTone = -90
+            ), true
+        )
+        processor.queueInput(input(12345, (-3456).toShort()))
+        val output = processor.output.order(ByteOrder.nativeOrder())
+        assertEquals(12345, output.short.toInt())
+        assertEquals(-3456, output.short.toInt())
+    }
+
+    @Test
+    fun eight_d_reset_restores_normal_stereo() {
+        val processor = makeProcessor()
+        processor.update(
+            SpatialSettings(is8dEnabled = true, mode = "static", staticPan = 100), true
+        )
+        processor.queueInput(input(9000, 9000))
+        processor.output
+        processor.update(SpatialSettings(), true)
+        processor.queueInput(input(7000, (-2500).toShort()))
+        val output = processor.output.order(ByteOrder.nativeOrder())
+        assertEquals(7000, output.short.toInt())
+        assertEquals(-2500, output.short.toInt())
+    }
+
+    @Test
     fun per_ear_volume_changes_each_channel_independently() {
         val processor = makeProcessor()
         processor.update(SpatialSettings(is8dEnabled = true, leftPercent = 40, rightPercent = 70), true)
