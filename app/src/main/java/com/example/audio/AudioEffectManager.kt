@@ -49,6 +49,44 @@ class AudioEffectManager(private val context: Context) {
     private val _activeSessions = MutableStateFlow<Set<Int>>(emptySet())
     val activeSessions: StateFlow<Set<Int>> = _activeSessions.asStateFlow()
 
+    // Only report a package as attached if this process currently owns a live EQ
+    // for a session that the player actually published. No invented global EQ.
+    private val _controlledPackages = MutableStateFlow<Set<String>>(emptySet())
+    val controlledPackages: StateFlow<Set<String>> = _controlledPackages.asStateFlow()
+
+    @Synchronized
+    private fun publishControlStatus() {
+        _controlledPackages.value = if (!isEnabled) emptySet() else {
+            activeEffectSessions.values.mapNotNull { effect ->
+                if (runCatching {
+                        effect.equalizer?.hasControl() == true && effect.equalizer?.enabled == true
+                    }.getOrDefault(false)
+                ) knownSessionPackages[effect.sessionId] else null
+            }.toSet()
+        }
+    }
+
+    /** Reapply parameters after an external player changes its audio processing route. */
+    @Synchronized
+    fun refreshActiveSessions() {
+        if (!isEnabled) {
+            publishControlStatus()
+            return
+        }
+        knownSessionPackages.toMap().forEach { (sessionId, packageName) ->
+            if (activeEffectSessions[sessionId]?.equalizer == null) {
+                attachSession(sessionId, packageName)
+            } else {
+                activeEffectSessions[sessionId]?.let { session ->
+                    if (runCatching { session.equalizer?.hasControl() == true }.getOrDefault(false)) {
+                        applyCurrentParametersToSession(session)
+                    }
+                }
+            }
+        }
+        publishControlStatus()
+    }
+
     // Internal session effects holder
     private class SessionEffects(
         val sessionId: Int,
@@ -117,11 +155,13 @@ class AudioEffectManager(private val context: Context) {
         // Do not probe deprecated global session 0; await a valid playback session.
     }
 
-    fun probeHardwareCapabilities(sampleSessionId: Int) {
+    fun probeHardwareCapabilities(sampleSessionId: Int, existingEqualizer: Equalizer? = null) {
         if (sampleSessionId <= 0) return
+        var temporaryProbe: Equalizer? = null
         try {
-            // Test with session 0 or sample session
-            val testEq = Equalizer(0, sampleSessionId)
+            val testEq = existingEqualizer ?: Equalizer(0, sampleSessionId).also {
+                temporaryProbe = it
+            }
             val numBands = testEq.numberOfBands.toInt()
             val range = testEq.bandLevelRange
             val minGain: Short = range?.getOrNull(0) ?: (-1500).toShort()
@@ -171,9 +211,8 @@ class AudioEffectManager(private val context: Context) {
                 isVirtualizerSupported = virtSupported
             )
 
-            testEq.release()
         } catch (e: Exception) {
-            Log.w(TAG, "Global probe on session $sampleSessionId fallback to standard 5-band", e)
+            Log.w(TAG, "Session probe on session $sampleSessionId fallback to standard 5-band", e)
             // Fallback default 5 bands: 60Hz, 230Hz, 910Hz, 3600Hz, 14000Hz
             val fallbackBands = listOf(
                 EqualizerBand(0, 60, -1500, 1500, 0),
@@ -191,6 +230,8 @@ class AudioEffectManager(private val context: Context) {
                 isBassBoostSupported = false,
                 isVirtualizerSupported = false
             )
+        } finally {
+            runCatching { temporaryProbe?.release() }
         }
     }
 
@@ -211,11 +252,30 @@ class AudioEffectManager(private val context: Context) {
         try {
             if (sessionEffects.equalizer == null) {
                 val eq = Equalizer(1000, sessionId)
-                eq.enabled = isEnabled
                 sessionEffects.equalizer = eq
-                // Re-verify bands with this active session
-                if (!_capabilities.value.isHardwareEqualizerSupported || _hardwareBands.value.size != eq.numberOfBands.toInt()) {
-                    probeHardwareCapabilities(sessionId)
+                eq.setControlStatusListener { effect, hasControl ->
+                    synchronized(this@AudioEffectManager) {
+                        if (activeEffectSessions[sessionId]?.equalizer === effect) {
+                            if (hasControl && isEnabled) {
+                                applyCurrentParametersToSession(activeEffectSessions[sessionId]!!)
+                            }
+                            publishControlStatus()
+                        }
+                    }
+                }
+                eq.setEnableStatusListener { effect, _ ->
+                    synchronized(this@AudioEffectManager) {
+                        if (activeEffectSessions[sessionId]?.equalizer === effect) {
+                            publishControlStatus()
+                        }
+                    }
+                }
+                // Read hardware bands from the effect we actually own.
+                // Creating a second Equalizer just for probing can steal control.
+                if (!_capabilities.value.isHardwareEqualizerSupported ||
+                    _hardwareBands.value.size != eq.numberOfBands.toInt()
+                ) {
+                    probeHardwareCapabilities(sessionId, eq)
                 }
             }
         } catch (e: Exception) {
@@ -258,6 +318,7 @@ class AudioEffectManager(private val context: Context) {
             applyCurrentParametersToSession(sessionEffects)
         }
         _activeSessions.value = activeEffectSessions.keys.toSet()
+        publishControlStatus()
     }
 
     /**
@@ -270,6 +331,7 @@ class AudioEffectManager(private val context: Context) {
         val session = activeEffectSessions.remove(sessionId)
         session?.release()
         _activeSessions.value = activeEffectSessions.keys.toSet()
+        publishControlStatus()
     }
 
     @Synchronized
@@ -281,13 +343,11 @@ class AudioEffectManager(private val context: Context) {
             activeEffectSessions.values.forEach { it.release() }
             activeEffectSessions.clear()
             _activeSessions.value = emptySet()
+            publishControlStatus()
             return
         }
-        if (isEnabled && activeEffectSessions.isNotEmpty()) return
         this.isEnabled = true
-        knownSessionPackages.toMap().forEach { (session, owner) ->
-            attachSession(session, owner)
-        }
+        refreshActiveSessions()
     }
 
     @Synchronized
@@ -474,5 +534,6 @@ class AudioEffectManager(private val context: Context) {
         activeEffectSessions.values.forEach { it.release() }
         activeEffectSessions.clear()
         _activeSessions.value = emptySet()
+        _controlledPackages.value = emptySet()
     }
 }
