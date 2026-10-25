@@ -150,4 +150,5 @@
     <string name="app_eq_applies">EQ bu proqramda aktivdir (audio sessiya açılarsa)</string>
     <string name="app_eq_excluded">İstisna: bu proqramda AuraEQ effektləri söndürülüb</string>
     <string name="app_eq_platform_notice">Android yalnız proqramın verdiyi audio sessiyaya EQ, Bass və Virtualizer tətbiq etməyə icazə verir. Spotify və digər proqramlarda tam 8D sol-sağ keçid sistem səviyyəsində mümkün deyil.</string>
+    <string name="virtualizer_device_note">3D stereo genişləndirmə AuraEQ pleyerində mono musiqidə də işləyir. Spotify və digər tətbiqlərdə 3D təsiri cihazın audio sessiyası və qulaqcıq virtualizer dəstəyindən asılıdır.</string>
 </resources>
