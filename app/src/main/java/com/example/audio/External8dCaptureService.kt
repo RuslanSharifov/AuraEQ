@@ -23,6 +23,14 @@ import android.os.IBinder
 import android.os.Process
 import android.util.Log
 import com.example.MainActivity
+import com.example.AuraApplication
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.nio.ByteBuffer
@@ -55,6 +63,7 @@ class External8dCaptureService : Service() {
         }
     }
 
+    private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val running = AtomicBoolean(false)
     private var worker: Thread? = null
     private var recorder: AudioRecord? = null
@@ -76,6 +85,12 @@ class External8dCaptureService : Service() {
     override fun onCreate() {
         super.onCreate()
         current = this
+        val prefs = (application as AuraApplication).preferencesRepository
+        settingsScope.launch {
+            combine(prefs.spatialSettingsFlow, prefs.isEnabledFlow) { spatial, enabled ->
+                spatial to enabled
+            }.collect { (spatial, enabled) -> updateSettings(spatial, enabled) }
+        }
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(
             NotificationChannel(CHANNEL, "8D audio capture", NotificationManager.IMPORTANCE_LOW)
         )
@@ -225,6 +240,7 @@ class External8dCaptureService : Service() {
     }
 
     override fun onDestroy() {
+        settingsScope.cancel()
         running.set(false)
         val r = recorder
         val t = playback
