@@ -248,8 +248,9 @@ fun AuraMainScreen(
                     onTogglePower = { viewModel.toggleMasterPower() }
                 )
 
-                // Leave touch/scroll clearance for the floating nav.
-                Box(modifier = Modifier.weight(1f).padding(bottom = 87.dp)) {
+                // Let live screen pixels continue behind the refracting navigation
+                // glass. Individual scrolling screens reserve end-of-list clearance.
+                Box(modifier = Modifier.weight(1f)) {
                     Crossfade(
                         targetState = currentTab,
                         label = "tab_crossfade"
