@@ -553,7 +553,7 @@ fun EqualizerScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(90.dp))
+        Spacer(modifier = Modifier.height(144.dp))
     }
 
     // Save Preset Dialog
