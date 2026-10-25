@@ -137,6 +137,7 @@ fun AppsScreen(
                 val allPresets = state.factoryPresets + state.customPresets
                 val assignedPresetName = allPresets.find { it.id == app.presetId }?.name ?: "Flat"
                 val isSessionActive = state.activeAppSessions.contains(app.packageName)
+                val isEffectConnected = state.isEnabled && state.connectedAppPackages.contains(app.packageName)
 
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -165,14 +166,14 @@ fun AppsScreen(
                                         .size(42.dp)
                                         .clip(CircleShape)
                                         .background(
-                                            if (isSessionActive) AuraGreenSuccess.copy(alpha = 0.2f)
+                                            if (isEffectConnected) AuraGreenSuccess.copy(alpha = 0.2f)
                                             else AuraAccent.copy(alpha = 0.15f)
                                         )
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.MusicNote,
                                         contentDescription = null,
-                                        tint = if (isSessionActive) AuraGreenSuccess else AuraAccent,
+                                        tint = if (isEffectConnected) AuraGreenSuccess else AuraAccent,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -248,7 +249,7 @@ fun AppsScreen(
                             }
 
                             // Real Hardware / Session Status
-                            if (isSessionActive) {
+                            if (isEffectConnected) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Default.CheckCircle,
@@ -274,10 +275,29 @@ fun AppsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = stringResource(R.string.app_profile_listening),
+                                        text = if (isSessionActive) stringResource(R.string.spotify_session_no_control)
+                                                else stringResource(R.string.app_profile_listening),
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                }
+                            }
+                        }
+
+                        // Spotify can signal a session without granting EQ control.
+                        // We must not show green "active" just because a broadcast arrived.
+                        if (app.packageName == "com.spotify.music" && app.isEnabled && state.isEnabled) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (isEffectConnected) stringResource(R.string.spotify_connected_detail)
+                                    else if (isSessionActive) stringResource(R.string.spotify_no_control_detail)
+                                    else stringResource(R.string.spotify_no_session_detail),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (isSessionActive && !isEffectConnected) {
+                                TextButton(onClick = viewModel::retryAudioSessions) {
+                                    Text(stringResource(R.string.spotify_retry_session))
                                 }
                             }
                         }
