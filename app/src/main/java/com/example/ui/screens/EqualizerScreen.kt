@@ -4,6 +4,8 @@ import android.net.Uri
 import android.Manifest
 import android.os.Build
 import android.content.pm.PackageManager
+import com.example.audio.External8dCaptureState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.provider.OpenableColumns
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -83,11 +85,14 @@ import com.example.viewmodel.AuraViewModel
 fun EqualizerScreen(
     state: AuraUiState,
     viewModel: AuraViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onStartExternal8d: () -> Unit = {},
+    onStopExternal8d: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     val isDark = MaterialTheme.colorScheme.background.red < 0.2f
+    val externalCaptureStatus by External8dCaptureState.status.collectAsStateWithLifecycle()
     var showSaveDialog by remember { mutableStateOf(false) }
     var newPresetName by remember { mutableStateOf("") }
     var notificationGranted by remember {
@@ -387,6 +392,49 @@ fun EqualizerScreen(
             onChange = viewModel::setSpatialSettings,
             onReset = viewModel::resetSpatialSettings
         )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        GlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 24.dp) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.external_8d_title),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.external_8d_disclaimer),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = when {
+                        Build.VERSION.SDK_INT < 29 -> stringResource(R.string.external_8d_unsupported)
+                        externalCaptureStatus == "running" -> stringResource(R.string.external_8d_running)
+                        externalCaptureStatus == "error" -> stringResource(R.string.external_8d_error)
+                        else -> stringResource(R.string.external_8d_stopped)
+                    },
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Spacer(Modifier.height(8.dp))
+                if (externalCaptureStatus == "running") {
+                    Button(
+                        onClick = onStopExternal8d,
+                        modifier = Modifier.testTag("stop_external_8d")
+                    ) { Text(stringResource(R.string.external_8d_stop)) }
+                } else {
+                    Button(
+                        onClick = onStartExternal8d,
+                        enabled = Build.VERSION.SDK_INT >= 29 &&
+                            state.isEnabled && state.spatialSettings.is8dEnabled &&
+                            state.spatialSettings.mode != "off",
+                        modifier = Modifier.testTag("start_external_8d")
+                    ) { Text(stringResource(R.string.external_8d_start)) }
+                }
+            }
+        }
         Spacer(modifier = Modifier.height(12.dp))
 
         if (state.isEnabled && !notificationGranted && Build.VERSION.SDK_INT >= 33) {
