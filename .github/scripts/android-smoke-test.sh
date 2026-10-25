@@ -14,7 +14,12 @@ sleep 8
 
 if ! adb shell pidof "$PACKAGE" >/dev/null; then
     echo "::error::AuraEQ process closed immediately after launch."
-    adb logcat -d -v time | grep -E -A 45 'FATAL EXCEPTION|AndroidRuntime|com.aistudio.auraeq.pkvmrx' | tail -n 200 || true
+    echo "======== CRASH BUFFER ========"
+    adb logcat -b crash -d -v threadtime | tail -n 250 || true
+    echo "======== FATAL AND PROCESS EVENTS ========"
+    adb logcat -d -v threadtime | grep -E -A 35 -B 5 'FATAL EXCEPTION|Process: com.aistudio.auraeq.pkvmrx|Force finishing activity|am_crash|Fatal signal' | head -n 350 || true
+    echo "======== ACTIVITY STATE ========"
+    adb shell dumpsys activity activities | grep -E -A 5 'com.aistudio.auraeq.pkvmrx|mResumedActivity' | head -n 80 || true
     exit 1
 fi
 
