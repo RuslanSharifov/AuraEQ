@@ -22,7 +22,8 @@ class AuraApplication : Application() {
     lateinit var preferencesRepository: AuraPreferencesRepository
         private set
 
-    private val _sessionEvents = MutableSharedFlow<SessionEvent>(replay = 1)
+    private val sessionPackageNames = mutableMapOf<Int, String?>()
+    private val _sessionEvents = MutableSharedFlow<SessionEvent>(extraBufferCapacity = 16)
     val sessionEvents = _sessionEvents.asSharedFlow()
 
     override fun onCreate() {
@@ -59,14 +60,16 @@ class AuraApplication : Application() {
     }
 
     fun onAudioSessionOpened(sessionId: Int, packageName: String?) {
+        sessionPackageNames[sessionId] = packageName
         applicationScope.launch {
             _sessionEvents.emit(SessionEvent(sessionId, packageName, isOpen = true))
         }
     }
 
     fun onAudioSessionClosed(sessionId: Int) {
+        val packageName = sessionPackageNames.remove(sessionId)
         applicationScope.launch {
-            _sessionEvents.emit(SessionEvent(sessionId, null, isOpen = false))
+            _sessionEvents.emit(SessionEvent(sessionId, packageName, isOpen = false))
         }
     }
 
