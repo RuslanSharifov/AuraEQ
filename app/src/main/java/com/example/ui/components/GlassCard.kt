@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,6 +64,12 @@ fun GlassCard(
             .background(backgroundBrush)
             .border(width = 1.dp, color = borderColor, shape = shape)
     ) {
-        content()
+        // GlassCard is a Box (not a Material Surface). Without this, Text with
+        // an implicit color can inherit light/black LocalContentColor in dark mode.
+        CompositionLocalProvider(
+            LocalContentColor provides MaterialTheme.colorScheme.onSurface
+        ) {
+            content()
+        }
     }
 }
