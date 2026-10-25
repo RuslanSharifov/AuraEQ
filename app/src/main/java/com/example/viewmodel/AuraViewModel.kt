@@ -51,7 +51,8 @@ data class AuraUiState(
     val animationEnabled: Boolean = true,
     val language: String = "az",
     val deviceAutoSwitch: Boolean = true,
-    val activeAppSessions: Set<String> = emptySet()
+    val activeAppSessions: Set<String> = emptySet(),
+    val connectedAppPackages: Set<String> = emptySet()
 )
 
 class AuraViewModel(application: Application) : AndroidViewModel(application) {
@@ -214,31 +215,47 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
+            audioEffectManager.controlledPackages.collect { packages ->
+                _uiState.value = _uiState.value.copy(connectedAppPackages = packages)
+            }
+        }
+
+        // Replayable session snapshot handles broadcasts received before this
+        // ViewModel started. Multiple sessions per player are counted correctly.
+        viewModelScope.launch {
+            app.openSessionPackages.collect { sessions ->
+                val packages = sessions.values.filterNotNull().toSet()
+                activeAppPackages.clear()
+                activeAppPackages.addAll(packages)
+                _uiState.value = _uiState.value.copy(activeAppSessions = packages)
+                loadInstalledMediaApps()
+            }
+        }
+
+        viewModelScope.launch {
             testAudioPlayer.state.collect { playerState ->
                 _uiState.value = _uiState.value.copy(testPlayerState = playerState)
             }
         }
 
-        // Listen for session open/close broadcasts
+        // Apply the configured profile when a player opens a *new* session.
+        // Do not remove an app when just one of its multiple sessions closes.
         viewModelScope.launch {
             app.sessionEvents.collect { event ->
                 if (event.isOpen && event.packageName != null) {
-                    activeAppPackages.add(event.packageName)
-                    // Check if this app has an assigned preset profile!
-                    val appProfile = _uiState.value.installedApps.find { it.packageName == event.packageName }
-                    if (appProfile != null && appProfile.isEnabled) {
-                        applyPresetById(appProfile.presetId)
-                    }
-                } else if (!event.isOpen && event.packageName != null) {
-                    activeAppPackages.remove(event.packageName)
+                    val appProfile = _uiState.value.installedApps
+                        .find { it.packageName == event.packageName }
+                    if (appProfile?.isEnabled == true) applyPresetById(appProfile.presetId)
                 }
-                _uiState.value = _uiState.value.copy(activeAppSessions = activeAppPackages.toSet())
-                loadInstalledMediaApps()
             }
         }
 
         // Load installed media apps
         loadInstalledMediaApps()
+    }
+
+    fun retryAudioSessions() {
+        audioEffectManager.refreshActiveSessions()
     }
 
     fun toggleMasterPower() {
@@ -530,7 +547,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                         val appInfo = pm.getApplicationInfo(pkg, 0)
                         val label = pm.getApplicationLabel(appInfo).toString()
                         val saved = savedMap[pkg]
-                        val isSessionActive = activeAppPackages.contains(pkg)
+                        val isSessionActive = activePackagesSnapshot.contains(pkg)
                         discovered.add(
                             AppProfile(
                                 packageName = pkg,
