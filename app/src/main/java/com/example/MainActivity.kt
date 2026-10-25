@@ -1,6 +1,9 @@
 package com.example
 
 import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.ContextWrapper
 import android.content.res.Resources
 import android.content.res.Configuration
@@ -60,6 +63,28 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
 
     private val viewModel: AuraViewModel by viewModels()
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                val app = applicationContext as? AuraApplication
+                app?.eqNotification?.update(viewModel.uiState.value.isEnabled)
+            }
+        }
+
+    override fun onStart() {
+        super.onStart()
+        // One automatic runtime prompt on the first app launch on Android 13+.
+        // A denial is respected; the user can retry via the existing in-app control.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val permissions = getSharedPreferences("aura_permissions", MODE_PRIVATE)
+            if (!permissions.getBoolean("notification_requested", false)) {
+                permissions.edit().putBoolean("notification_requested", true).apply()
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
