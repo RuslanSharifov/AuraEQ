@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Policy-compliant package visibility for music and media players -->
     <queries>
@@ -55,6 +56,10 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".audio.EqToggleReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".audio.AudioSessionReceiver"
