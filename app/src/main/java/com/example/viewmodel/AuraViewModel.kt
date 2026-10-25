@@ -94,6 +94,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value = _uiState.value.copy(isEnabled = enabled)
                 audioEffectManager.setMasterEnabled(enabled)
                 testAudioPlayer.setSpatialSettings(_uiState.value.spatialSettings, enabled)
+                testAudioPlayer.setVirtualizerStrength(_uiState.value.virtualizer, enabled)
             }
         }
 
@@ -133,6 +134,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             preferences.virtualizerFlow.collect { virt ->
                 _uiState.value = _uiState.value.copy(virtualizer = virt)
                 audioEffectManager.setVirtualizer(virt)
+                testAudioPlayer.setVirtualizerStrength(virt, _uiState.value.isEnabled)
             }
         }
 
@@ -254,6 +256,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(isEnabled = newState)
         audioEffectManager.setMasterEnabled(newState)
         testAudioPlayer.setSpatialSettings(_uiState.value.spatialSettings, newState)
+        testAudioPlayer.setVirtualizerStrength(_uiState.value.virtualizer, newState)
         viewModelScope.launch { preferences.setEnabled(newState) }
     }
 
@@ -358,6 +361,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         audioEffectManager.setTreble(0)
         audioEffectManager.setVirtualizer(0)
         testAudioPlayer.setSpatialSettings(SpatialSettings(), _uiState.value.isEnabled)
+        testAudioPlayer.setVirtualizerStrength(0, _uiState.value.isEnabled)
         _uiState.value = _uiState.value.copy(
             activePresetId = "flat",
             activePresetName = "Normal / Flat",
