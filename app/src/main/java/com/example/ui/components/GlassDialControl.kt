@@ -124,7 +124,7 @@ fun GlassDialControl(
                             var dragFraction = updatedFraction
                             var lastSent = updatedValue
                             drag(down.id) { change ->
-                                val delta = -change.positionChange().y / 200f
+                                val delta = -(change.position.y - change.previousPosition.y) / 200f
                                 change.consume()
                                 dragFraction = (dragFraction + delta).coerceIn(0f, 1f)
                                 val next = (minValue + dragFraction * range).roundToInt()
