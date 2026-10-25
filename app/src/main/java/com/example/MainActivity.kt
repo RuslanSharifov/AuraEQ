@@ -150,7 +150,9 @@ class MainActivity : ComponentActivity() {
             ) {
                 MyApplicationTheme(themeMode = state.themeMode) {
                     AuraMainScreen(
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        onStartExternal8d = ::requestExternal8dCapture,
+                        onStopExternal8d = ::stopExternal8dCapture
                     )
                 }
             }
@@ -202,7 +204,9 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AuraMainScreen(
-    viewModel: AuraViewModel
+    viewModel: AuraViewModel,
+    onStartExternal8d: () -> Unit,
+    onStopExternal8d: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var currentTab by remember { mutableStateOf(AuraTab.EQUALIZER) }
@@ -294,7 +298,12 @@ fun AuraMainScreen(
                         label = "tab_crossfade"
                     ) { tab ->
                         when (tab) {
-                            AuraTab.EQUALIZER -> EqualizerScreen(state = state, viewModel = viewModel)
+                            AuraTab.EQUALIZER -> EqualizerScreen(
+                                state = state,
+                                viewModel = viewModel,
+                                onStartExternal8d = onStartExternal8d,
+                                onStopExternal8d = onStopExternal8d
+                            )
                             AuraTab.APPS -> AppsScreen(state = state, viewModel = viewModel)
                             AuraTab.PRESETS -> PresetsScreen(state = state, viewModel = viewModel)
                             AuraTab.SETTINGS -> SettingsScreen(state = state, viewModel = viewModel)
