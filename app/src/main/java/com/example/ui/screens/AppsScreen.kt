@@ -98,6 +98,13 @@ fun AppsScreen(
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Spacer(modifier = Modifier.height(5.dp))
+        Text(
+            text = stringResource(R.string.app_eq_platform_notice),
+            fontSize = 11.sp,
+            lineHeight = 15.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
