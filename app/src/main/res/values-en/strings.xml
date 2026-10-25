@@ -141,4 +141,8 @@
     <string name="spotify_no_control_detail">Spotify session detected, but Android EQ control is unavailable. Turn off the built-in Spotify equalizer and try reconnecting.</string>
     <string name="spotify_no_session_detail">No Spotify audio session was delivered. Start playback, then open AuraEQ via Spotify Playback → Equalizer. Android does not expose arbitrary player session IDs.</string>
     <string name="spotify_retry_session">Reconnect audio session</string>
+
+    <string name="spatial_enabled">8D effect on</string>
+    <string name="spatial_disabled">8D effect off</string>
+    <string name="spatial_reset">Reset</string>
 </resources>
