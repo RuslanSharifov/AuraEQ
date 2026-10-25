@@ -2,6 +2,7 @@ package com.example
 
 import android.app.Application
 import com.example.audio.AudioEffectManager
+import com.example.audio.EqNotificationController
 import com.example.data.preferences.AuraPreferencesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,9 @@ class AuraApplication : Application() {
     lateinit var preferencesRepository: AuraPreferencesRepository
         private set
 
+    lateinit var eqNotification: EqNotificationController
+        private set
+
     private val sessionPackageNames = mutableMapOf<Int, String?>()
     private val _sessionEvents = MutableSharedFlow<SessionEvent>(extraBufferCapacity = 16)
     val sessionEvents = _sessionEvents.asSharedFlow()
@@ -30,11 +34,15 @@ class AuraApplication : Application() {
         super.onCreate()
         preferencesRepository = AuraPreferencesRepository(this)
         audioEffectManager = AudioEffectManager(this)
+        eqNotification = EqNotificationController(this)
 
-        // Observe initial enabled state and gains from DataStore
+        // A fresh process must not silently reapply leftover audio coloration.
+        // Saved user presets are retained; live effects start neutral and disabled.
         applicationScope.launch {
+            preferencesRepository.resetAudioTuning(disable = true)
             preferencesRepository.isEnabledFlow.collect { enabled ->
                 audioEffectManager.setMasterEnabled(enabled)
+                eqNotification.update(enabled)
             }
         }
         applicationScope.launch {
@@ -76,5 +84,6 @@ class AuraApplication : Application() {
     override fun onTerminate() {
         super.onTerminate()
         audioEffectManager.release()
+        eqNotification.update(false)
     }
 }
