@@ -30,9 +30,8 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+      # GitHub's Ubuntu runner already provides Android command-line tools.
+      # android-actions/setup-android@v3 currently fails trying to install retired "tools".
       - name: Install Android platform 36.1
         run: |
           sdkmanager --install "platform-tools" "platforms;android-36" "platforms;android-36.1" "build-tools;36.0.0"
