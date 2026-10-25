@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.AuraApplication
@@ -405,10 +406,12 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadInstalledMediaApps() {
+        // Access the mutable session set on the main thread before switching dispatchers.
+        val activePackagesSnapshot = activeAppPackages.toSet()
         viewModelScope.launch(Dispatchers.IO) {
-            val pm = getApplication<Application>().packageManager
-            val savedMap = preferences.appProfilesFlow.first()
-            val activePackagesSnapshot = activeAppPackages.toSet()
+            try {
+                val pm = getApplication<Application>().packageManager
+                val savedMap = preferences.appProfilesFlow.first()
 
             val discovered = mutableListOf<AppProfile>()
 
@@ -474,7 +477,12 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // Empty states should be truthful; never display apps that are not installed.
-            _uiState.value = _uiState.value.copy(installedApps = discovered.distinctBy { it.packageName })
+                _uiState.value = _uiState.value.copy(installedApps = discovered.distinctBy { it.packageName })
+            } catch (e: Exception) {
+                // OEM PackageManager and DataStore may fail. Never terminate the app on first launch.
+                Log.e("AuraViewModel", "Unable to load installed media apps", e)
+                _uiState.value = _uiState.value.copy(installedApps = emptyList())
+            }
         }
     }
 
