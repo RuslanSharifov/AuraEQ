@@ -229,7 +229,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        }
 
         // Per-app preset ownership lives inside AudioEffectManager. An incoming
         // Spotify session must NEVER replace global EQ sliders for every app.
@@ -431,18 +430,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             val currentMap = _uiState.value.deviceProfiles
             preferences.saveDeviceProfile(type, presetId, currentMap)
         }
-    }
-
-    fun toggleTestPlayerPlayPause() {
-    }
-
-    fun seekTestPlayer(positionMs: Long) {
-    }
-
-    fun loadCustomAudioUri(uri: Uri, name: String) {
-    }
-
-    fun loadReferenceTrack() {
     }
 
     fun setThemeMode(mode: String) {
