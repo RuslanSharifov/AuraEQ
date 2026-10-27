@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -109,6 +110,18 @@ fun LibraryScreen(
     var trackForActionMenu by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+    val audioPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        uris.forEach { uri ->
+            try { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            catch (_: SecurityException) { }
+        }
+        if (uris.isNotEmpty()) viewModel.importAudioFiles(uris) { count ->
+            Toast.makeText(context, "$count musiqi kitabxanaya əlavə edildi", Toast.LENGTH_LONG).show()
+        }
+    }
 
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -304,7 +317,7 @@ fun LibraryScreen(
                     onPlayAll = { viewModel.playAll(filteredTracks) },
                     onShuffleAll = { viewModel.shuffleAll(filteredTracks) },
                     onMoreClick = { track -> trackForActionMenu = track },
-                    onAddFolder = { folderPicker.launch(null) }
+                    onAddFolder = { audioPicker.launch(arrayOf("audio/*")) }
                 )
             }
             1 -> {
@@ -410,7 +423,7 @@ fun LibraryScreen(
                 FoldersView(
                     selectedFolderUris = state.selectedFolderUris,
                     allTracks = allTracks,
-                    onAddFolder = { folderPicker.launch(null) },
+                    onAddFolder = { audioPicker.launch(arrayOf("audio/*")) },
                     onRemoveFolder = { viewModel.removeFolder(it) },
                     onRescanLibrary = { viewModel.rescanLibrary() },
                     onPlayFolder = { fUri ->
