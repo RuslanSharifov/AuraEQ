@@ -105,6 +105,18 @@ fun SettingsScreen(
     var showKoFiDialog by remember { mutableStateOf(false) }
     var customKoFiInput by remember { mutableStateOf(state.kofiUrl) }
 
+    val audioPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        uris.forEach { uri ->
+            try { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            catch (_: SecurityException) { }
+        }
+        if (uris.isNotEmpty()) viewModel.importAudioFiles(uris) { count ->
+            Toast.makeText(context, "$count musiqi kitabxanaya əlavə edildi", Toast.LENGTH_LONG).show()
+        }
+    }
+
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { treeUri: Uri? ->
@@ -248,6 +260,17 @@ fun SettingsScreen(
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
+
+                Button(
+                    onClick = { audioPicker.launch(arrayOf("audio/*")) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("MP3 və digər musiqi fayllarını seç") }
+                Text(
+                    text = "Android Download və yaddaş kökü qovluğunun seçilməsini məhdudlaşdırır. Alt qovluq və ya ayrı-ayrı musiqi faylları seç.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Rescan Library Button
                 SettingActionRow(
