@@ -73,6 +73,7 @@ import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.model.Track
 import com.example.data.repository.Playlist
+import com.example.ui.components.SpotifyEmbedDialog
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.AuraAccent
 import com.example.viewmodel.AuraViewModel
@@ -86,6 +87,7 @@ fun PlaylistsScreen(
     val spotifyStore = remember(context) { context.getSharedPreferences("aura_spotify_links", android.content.Context.MODE_PRIVATE) }
     var spotifyPlaylists by remember { mutableStateOf(spotifyStore.getStringSet("playlist_ids", emptySet()).orEmpty().toSet()) }
     var showSpotifyDialog by remember { mutableStateOf(false) }
+    var spotifyPlayingId by remember { mutableStateOf<String?>(null) }
     val playlists by viewModel.playlists.collectAsStateWithLifecycle(emptyList())
     val favoriteTracks by viewModel.favoriteTracks.collectAsStateWithLifecycle(emptyList())
 
@@ -162,14 +164,7 @@ fun PlaylistsScreen(
                             spotifyPlaylists.sorted().forEach { id ->
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
                                     Text("Spotify • " + id.take(8) + "…", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                                    TextButton(onClick = {
-                                        val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse("spotify:playlist:$id"))
-                                        try { context.startActivity(deepLink) }
-                                        catch (_: Exception) {
-                                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://open.spotify.com/playlist/$id"))) }
-                                            catch (_: Exception) { Toast.makeText(context, "Spotify açılmadı", Toast.LENGTH_SHORT).show() }
-                                        }
-                                    }) { Text("Dinlə") }
+                                    TextButton(onClick = { spotifyPlayingId = id }) { Text("Dinlə") }
                                     TextButton(onClick = {
                                         spotifyPlaylists = spotifyPlaylists - id
                                         spotifyStore.edit().putStringSet("playlist_ids", spotifyPlaylists).apply()
@@ -340,6 +335,10 @@ fun PlaylistsScreen(
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.create_playlist))
             }
         }
+    }
+
+    spotifyPlayingId?.let { id ->
+        SpotifyEmbedDialog(id, onDismiss = { spotifyPlayingId = null })
     }
 
     if (showSpotifyDialog) {
