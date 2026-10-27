@@ -82,6 +82,25 @@ class MusicLibraryRepository(
         true
     }
 
+    /** Import individually selected local audio files when Android refuses a folder tree. */
+    suspend fun importAudioFiles(uris: List<Uri>): Int = withContext(Dispatchers.IO) {
+        val imported = mutableListOf<TrackEntity>()
+        for (uri in uris.distinct()) {
+            try {
+                val file = DocumentFile.fromSingleUri(context, uri) ?: continue
+                val name = file.name.orEmpty()
+                val extension = name.substringAfterLast('.', "").lowercase()
+                val isAudio = context.contentResolver.getType(uri)?.startsWith("audio/") == true
+                if (!file.isFile || (extension !in supportedExtensions && !isAudio)) continue
+                extractTrackMetadata(file, "manual_audio", "Seçilmiş musiqilər")?.let(imported::add)
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot import selected audio file: $uri", e)
+            }
+        }
+        if (imported.isNotEmpty()) trackDao.insertOrUpdateTracks(imported)
+        imported.size
+    }
+
     suspend fun removeFolder(folderUriStr: String) = withContext(Dispatchers.IO) {
         val current = preferencesRepository.folderUrisFlow.first()
         val updated = current - folderUriStr
