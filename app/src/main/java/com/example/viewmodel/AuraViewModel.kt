@@ -9,8 +9,6 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.AuraApplication
-import com.example.audio.TestAudioPlayerManager
-import com.example.audio.TestPlayerState
 import com.example.audio.SpatialSettings
 import com.example.audio.External8dCaptureService
 import com.example.data.model.AppProfile
@@ -44,7 +42,6 @@ data class AuraUiState(
     val currentDeviceType: AudioDeviceType = AudioDeviceType.SPEAKER,
     val currentDeviceName: String = "Phone Speaker",
     val activeSessionCount: Int = 0,
-    val testPlayerState: TestPlayerState = TestPlayerState(),
     val installedApps: List<AppProfile> = emptyList(),
     val deviceProfiles: Map<AudioDeviceType, String> = emptyMap(),
     val themeMode: String = "light",
@@ -61,10 +58,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as AuraApplication
     private val audioEffectManager = app.audioEffectManager
     private val preferences = app.preferencesRepository
-
-    private val testAudioPlayer = TestAudioPlayerManager(application) { sessionId ->
-        audioEffectManager.attachSession(sessionId, application.packageName)
-    }
 
     private val _uiState = MutableStateFlow(AuraUiState())
     val uiState: StateFlow<AuraUiState> = _uiState.asStateFlow()
@@ -94,9 +87,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             preferences.isEnabledFlow.collect { enabled ->
                 _uiState.value = _uiState.value.copy(isEnabled = enabled)
                 audioEffectManager.setMasterEnabled(enabled)
-                testAudioPlayer.setSpatialSettings(_uiState.value.spatialSettings, enabled)
                 External8dCaptureService.current?.updateSettings(_uiState.value.spatialSettings, enabled)
-                testAudioPlayer.setVirtualizerStrength(_uiState.value.virtualizer, enabled)
             }
         }
 
@@ -106,7 +97,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 // stored value; applying the stored one would snap the slider back.
                 if (spatialSaveJob?.isActive == true) return@collect
                 _uiState.value = _uiState.value.copy(spatialSettings = spatial)
-                testAudioPlayer.setSpatialSettings(spatial, _uiState.value.isEnabled)
                 External8dCaptureService.current?.updateSettings(spatial, _uiState.value.isEnabled)
             }
         }
@@ -140,7 +130,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             preferences.virtualizerFlow.collect { virt ->
                 _uiState.value = _uiState.value.copy(virtualizer = virt)
                 audioEffectManager.setVirtualizer(virt)
-                testAudioPlayer.setVirtualizerStrength(virt, _uiState.value.isEnabled)
             }
         }
 
@@ -240,10 +229,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        viewModelScope.launch {
-            testAudioPlayer.state.collect { playerState ->
-                _uiState.value = _uiState.value.copy(testPlayerState = playerState)
-            }
         }
 
         // Per-app preset ownership lives inside AudioEffectManager. An incoming
@@ -261,9 +246,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         val newState = !_uiState.value.isEnabled
         _uiState.value = _uiState.value.copy(isEnabled = newState)
         audioEffectManager.setMasterEnabled(newState)
-        testAudioPlayer.setSpatialSettings(_uiState.value.spatialSettings, newState)
         External8dCaptureService.current?.updateSettings(_uiState.value.spatialSettings, newState)
-        testAudioPlayer.setVirtualizerStrength(_uiState.value.virtualizer, newState)
         viewModelScope.launch { preferences.setEnabled(newState) }
     }
 
@@ -280,7 +263,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             audioEffectManager.setBassBoost(preset.bassBoost)
             audioEffectManager.setTreble(preset.treble)
             audioEffectManager.setVirtualizer(preset.virtualizer)
-            testAudioPlayer.setVirtualizerStrength(preset.virtualizer, _uiState.value.isEnabled)
         }
     }
 
@@ -334,7 +316,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun updateVirtualizer(value: Int) {
         val newValue = value.coerceIn(0, 1000)
         audioEffectManager.setVirtualizer(newValue)
-        testAudioPlayer.setVirtualizerStrength(newValue, _uiState.value.isEnabled)
         _uiState.value = _uiState.value.copy(virtualizer = newValue)
         virtualizerSaveJob?.cancel()
         virtualizerSaveJob = viewModelScope.launch {
@@ -346,7 +327,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun setSpatialSettings(value: SpatialSettings) {
         val updated = value.sanitized()
         _uiState.value = _uiState.value.copy(spatialSettings = updated)
-        testAudioPlayer.setSpatialSettings(updated, _uiState.value.isEnabled)
         External8dCaptureService.current?.updateSettings(updated, _uiState.value.isEnabled)
         spatialSaveJob?.cancel()
         spatialSaveJob = viewModelScope.launch {
@@ -360,7 +340,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         spatialSaveJob?.cancel()
         val defaults = SpatialSettings()
         _uiState.value = _uiState.value.copy(spatialSettings = defaults)
-        testAudioPlayer.setSpatialSettings(defaults, _uiState.value.isEnabled)
         External8dCaptureService.current?.updateSettings(defaults, _uiState.value.isEnabled)
         viewModelScope.launch { preferences.saveSpatialSettings(defaults) }
     }
@@ -371,9 +350,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         audioEffectManager.setBassBoost(0)
         audioEffectManager.setTreble(0)
         audioEffectManager.setVirtualizer(0)
-        testAudioPlayer.setSpatialSettings(SpatialSettings(), _uiState.value.isEnabled)
         External8dCaptureService.current?.updateSettings(SpatialSettings(), _uiState.value.isEnabled)
-        testAudioPlayer.setVirtualizerStrength(0, _uiState.value.isEnabled)
         _uiState.value = _uiState.value.copy(
             activePresetId = "flat",
             activePresetName = "Normal / Flat",
@@ -457,19 +434,15 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleTestPlayerPlayPause() {
-        testAudioPlayer.togglePlayPause()
     }
 
     fun seekTestPlayer(positionMs: Long) {
-        testAudioPlayer.seekTo(positionMs)
     }
 
     fun loadCustomAudioUri(uri: Uri, name: String) {
-        testAudioPlayer.playCustomUri(uri, name)
     }
 
     fun loadReferenceTrack() {
-        testAudioPlayer.loadReferenceTrack()
     }
 
     fun setThemeMode(mode: String) {
@@ -624,7 +597,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         cancelPendingSliderSaves()
-        testAudioPlayer.release()
         super.onCleared()
     }
 }
