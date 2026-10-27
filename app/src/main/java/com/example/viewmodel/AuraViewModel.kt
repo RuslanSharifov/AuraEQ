@@ -400,6 +400,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { preferences.saveSpatialSettings(defaults) }
     }
 
+    @OptIn(androidx.media3.common.util.UnstableApi::class)
     fun resetToNeutral() {
         cancelPendingSliderSaves()
         audioEffectManager.setBandsGains(listOf(0, 0, 0, 0, 0))
