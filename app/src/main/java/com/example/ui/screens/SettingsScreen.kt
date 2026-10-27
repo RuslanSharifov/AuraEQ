@@ -1,6 +1,13 @@
 package com.example.ui.screens
 
 import android.content.Intent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import android.net.Uri
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
@@ -592,9 +599,23 @@ private fun SettingToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val bg by animateColorAsState(
+        targetValue = if (checked) AuraAccent else MaterialTheme.colorScheme.surfaceVariant,
+        animationSpec = tween(280), label = "switch_background"
+    )
+    val thumbPosition by animateDpAsState(
+        targetValue = if (checked) 26.dp else 4.dp,
+        animationSpec = tween(260), label = "switch_slide"
+    )
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -603,18 +624,27 @@ private fun SettingToggleRow(
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface
             )
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = AuraAccent)
-        )
+        Box(
+            modifier = Modifier
+                .size(width = 54.dp, height = 32.dp)
+                .clip(RoundedCornerShape(50))
+                .background(bg),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Box(
+                modifier = Modifier
+                    .offset(x = thumbPosition)
+                    .size(24.dp)
+                    .background(Color.White, CircleShape)
+            )
+        }
     }
 }
 
