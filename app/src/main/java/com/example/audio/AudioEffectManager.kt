@@ -78,14 +78,10 @@ class AudioEffectManager(private val context: Context) {
         knownSessionPackages.toMap().forEach { (sessionId, packageName) ->
             if (!AppAudioPolicy.shouldProcess(packageName, appPolicies)) {
                 activeEffectSessions.remove(sessionId)?.release()
-            } else if (activeEffectSessions[sessionId]?.equalizer == null) {
-                attachSession(sessionId, packageName)
             } else {
-                activeEffectSessions[sessionId]?.let { session ->
-                    if (runCatching { session.equalizer?.hasControl() == true }.getOrDefault(false)) {
-                        applyCurrentParametersToSession(session)
-                    }
-                }
+                // Retry missing processors immediately and reapply all live parameters.
+                // Pausing/resuming playback must not be required for sessions we own.
+                attachSession(sessionId, packageName)
             }
         }
         _activeSessions.value = activeEffectSessions.keys.toSet()
