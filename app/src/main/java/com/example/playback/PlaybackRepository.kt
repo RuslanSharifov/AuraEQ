@@ -17,6 +17,9 @@ class PlaybackRepository(private val context: Context) {
         val intent = Intent(context, AuraMediaSessionService::class.java)
         // Media3 promotes the session service to foreground after playback begins.
         // Starting it as FGS before preparation triggers Android's startup timeout.
+        // MediaSessionService promotes itself when ExoPlayer actually starts playback.
+        // startForegroundService() here causes ForegroundServiceDidNotStartInTimeException
+        // while the service is still preparing a playlist/media session.
         context.startService(intent)
         return AuraMediaSessionService.instance
     }
