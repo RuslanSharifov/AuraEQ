@@ -73,3 +73,11 @@ gradle :app:bundleRelease
 ```bash
 gradle :app:testDebugUnitTest
 ```
+
+---
+
+## Open source and support
+
+AuraEQ is distributed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE) and [third-party dependency guidance](THIRD_PARTY_NOTICES.md) for copyright and dependency details.
+
+The Settings page includes a gently animated, optional **Ko-fi support card**. The button remains disabled until the maintainer adds their actual Ko-fi profile URL, as described in [Ko-fi setup](docs/KOFI_SETUP.md). Donations, if enabled, open externally in the browser; AuraEQ does not collect payment information.

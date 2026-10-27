@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.ui.components.KoFiSupportCard
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.AuraAccent
 import com.example.ui.theme.AuraRedError
@@ -545,6 +546,13 @@ fun SettingsScreen(
                 }
             }
         }
+
+        // Optional external support link; audio processing and preferences stay unchanged.
+        KoFiSupportCard(
+            animationsEnabled = state.animationEnabled,
+            isAzerbaijani = state.language == "az",
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(modifier = Modifier.height(144.dp))
     }
