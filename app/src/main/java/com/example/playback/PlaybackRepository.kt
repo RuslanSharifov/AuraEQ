@@ -2,7 +2,6 @@ package com.example.playback
 
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.ContextCompat
 import com.example.audio.SpatialSettings
 import com.example.data.model.Track
 import kotlinx.coroutines.flow.StateFlow
@@ -16,11 +15,9 @@ class PlaybackRepository(private val context: Context) {
         if (existing != null) return existing
 
         val intent = Intent(context, AuraMediaSessionService::class.java)
-        try {
-            ContextCompat.startForegroundService(context, intent)
-        } catch (_: Exception) {
-            context.startService(intent)
-        }
+        // Media3 promotes the session service to foreground after playback begins.
+        // Starting it as FGS before preparation triggers Android's startup timeout.
+        context.startService(intent)
         return AuraMediaSessionService.instance
     }
 
