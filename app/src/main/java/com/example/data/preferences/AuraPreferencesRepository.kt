@@ -36,6 +36,17 @@ class AuraPreferencesRepository(private val context: Context) {
     private val KEY_ANIMATION_ENABLED = booleanPreferencesKey("animation_enabled")
     private val KEY_LANGUAGE = stringPreferencesKey("language")
     private val KEY_DEVICE_AUTO_SWITCH = booleanPreferencesKey("device_auto_switch")
+    private val KEY_FOLDER_URIS = stringPreferencesKey("folder_uris")
+    private val KEY_EXTERNAL_APP_EQ = booleanPreferencesKey("external_app_eq")
+    private val KEY_RESUME_PLAYBACK = booleanPreferencesKey("resume_playback")
+    private val KEY_REMEMBER_QUEUE = booleanPreferencesKey("remember_queue")
+    private val KEY_PAUSE_ON_DISCONNECT = booleanPreferencesKey("pause_on_disconnect")
+    private val KEY_LAST_PLAYED_URI = stringPreferencesKey("last_played_uri")
+    private val KEY_LAST_PLAYED_POSITION = stringPreferencesKey("last_played_position")
+    private val KEY_REPEAT_MODE = intPreferencesKey("repeat_mode")
+    private val KEY_SHUFFLE_MODE = booleanPreferencesKey("shuffle_mode")
+    private val KEY_GLASS_INTENSITY = intPreferencesKey("glass_intensity")
+    private val KEY_KOFI_URL = stringPreferencesKey("kofi_url")
 
     val spatialSettingsFlow: Flow<SpatialSettings> = context.dataStore.data.map { prefs ->
         try {
@@ -263,6 +274,105 @@ class AuraPreferencesRepository(private val context: Context) {
 
     suspend fun setDeviceAutoSwitch(enabled: Boolean) {
         context.dataStore.edit { it[KEY_DEVICE_AUTO_SWITCH] = enabled }
+    }
+
+    val folderUrisFlow: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[KEY_FOLDER_URIS] ?: "[]"
+        try {
+            val arr = JSONArray(raw)
+            val result = mutableSetOf<String>()
+            for (i in 0 until arr.length()) {
+                result.add(arr.getString(i))
+            }
+            result
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }.distinctUntilChanged()
+
+    suspend fun saveFolderUris(uris: Set<String>) {
+        val arr = JSONArray()
+        uris.forEach { arr.put(it) }
+        context.dataStore.edit { it[KEY_FOLDER_URIS] = arr.toString() }
+    }
+
+    val externalAppEqFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_EXTERNAL_APP_EQ] ?: false
+    }.distinctUntilChanged()
+
+    suspend fun setExternalAppEq(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_EXTERNAL_APP_EQ] = enabled }
+    }
+
+    val resumePlaybackFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_RESUME_PLAYBACK] ?: true
+    }.distinctUntilChanged()
+
+    suspend fun setResumePlayback(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_RESUME_PLAYBACK] = enabled }
+    }
+
+    val rememberQueueFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_REMEMBER_QUEUE] ?: true
+    }.distinctUntilChanged()
+
+    suspend fun setRememberQueue(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_REMEMBER_QUEUE] = enabled }
+    }
+
+    val pauseOnDisconnectFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PAUSE_ON_DISCONNECT] ?: true
+    }.distinctUntilChanged()
+
+    suspend fun setPauseOnDisconnect(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_PAUSE_ON_DISCONNECT] = enabled }
+    }
+
+    val lastPlayedUriFlow: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LAST_PLAYED_URI]
+    }.distinctUntilChanged()
+
+    val lastPlayedPositionFlow: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LAST_PLAYED_POSITION]?.toLongOrNull() ?: 0L
+    }.distinctUntilChanged()
+
+    suspend fun saveLastPlayed(uri: String, positionMs: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_PLAYED_URI] = uri
+            prefs[KEY_LAST_PLAYED_POSITION] = positionMs.toString()
+        }
+    }
+
+    val repeatModeFlow: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[KEY_REPEAT_MODE] ?: 0
+    }.distinctUntilChanged()
+
+    suspend fun setRepeatMode(mode: Int) {
+        context.dataStore.edit { it[KEY_REPEAT_MODE] = mode }
+    }
+
+    val shuffleModeFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SHUFFLE_MODE] ?: false
+    }.distinctUntilChanged()
+
+    suspend fun setShuffleMode(shuffle: Boolean) {
+        context.dataStore.edit { it[KEY_SHUFFLE_MODE] = shuffle }
+    }
+
+    val glassIntensityFlow: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[KEY_GLASS_INTENSITY] ?: 80
+    }.distinctUntilChanged()
+
+    suspend fun setGlassIntensity(intensity: Int) {
+        context.dataStore.edit { it[KEY_GLASS_INTENSITY] = intensity }
+    }
+
+    val kofiUrlFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_KOFI_URL] ?: "https://ko-fi.com"
+    }.distinctUntilChanged()
+
+    suspend fun setKofiUrl(url: String) {
+        context.dataStore.edit { it[KEY_KOFI_URL] = url }
     }
 
     suspend fun resetAll() {

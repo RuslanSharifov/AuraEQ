@@ -36,6 +36,18 @@ class AuraApplication : Application() {
     lateinit var eqNotification: EqNotificationController
         private set
 
+    lateinit var musicDatabase: com.example.data.local.AuraMusicDatabase
+        private set
+
+    lateinit var musicLibraryRepository: com.example.data.repository.MusicLibraryRepository
+        private set
+
+    lateinit var playlistRepository: com.example.data.repository.PlaylistRepository
+        private set
+
+    lateinit var playbackRepository: com.example.playback.PlaybackRepository
+        private set
+
     private val sessionPackageNames = mutableMapOf<Int, String?>()
     private val _openSessionPackages = MutableStateFlow<Map<Int, String?>>(emptyMap())
     val openSessionPackages = _openSessionPackages.asStateFlow()
@@ -49,6 +61,18 @@ class AuraApplication : Application() {
         preferencesRepository = AuraPreferencesRepository(this)
         audioEffectManager = AudioEffectManager(this)
         eqNotification = EqNotificationController(this)
+
+        musicDatabase = com.example.data.local.AuraMusicDatabase.getInstance(this)
+        musicLibraryRepository = com.example.data.repository.MusicLibraryRepository(
+            this,
+            musicDatabase.trackDao(),
+            musicDatabase.playlistDao(),
+            preferencesRepository
+        )
+        playlistRepository = com.example.data.repository.PlaylistRepository(
+            musicDatabase.playlistDao()
+        )
+        playbackRepository = com.example.playback.PlaybackRepository(this)
 
         // Android 8+ can suppress manifest-declared implicit broadcasts from Spotify.
         // A context-registered EXPORTED receiver handles them while the app process lives.

@@ -3,9 +3,10 @@
     <string name="app_tagline">Premial Səs Ekvalayzeri</string>
 
     <!-- Navigation -->
+    <string name="nav_home">Əsas</string>
+    <string name="nav_library">Kitabxana</string>
+    <string name="nav_playlists">Pleylistlər</string>
     <string name="nav_equalizer">Ekvalayzer</string>
-    <string name="nav_apps">Tətbiqlər</string>
-    <string name="nav_presets">Ön təyinatlar</string>
     <string name="nav_settings">Tənzimləmələr</string>
 
     <!-- Equalizer Screen -->
@@ -163,4 +164,127 @@
     <string name="external_8d_no_signal">Səs siqnalı gəlmir: mənbə susdurulub və ya bu tətbiq capture-a icazə vermir (Spotify kimi). Orijinal səs normal işləyir.</string>
     <string name="spatial_expand">8D panelini aç</string>
     <string name="spatial_collapse">8D panelini bağla</string>
+
+    <!-- Music Player & Library -->
+    <string name="home_title">Xoş gəlmisiniz</string>
+    <string name="home_subtitle">AuraEQ Musiqi Pleyeri və Ekvalayzer</string>
+    <string name="recently_played">Son Dinlənilənlər</string>
+    <string name="recently_added">Son Əlavə Edilənlər</string>
+    <string name="favorites">Sevimlilər</string>
+    <string name="quick_folders">Qovluqlar</string>
+    <string name="active_eq_preset">Aktiv EQ Profili</string>
+    <string name="no_tracks_played_yet">Hələ heç bir trek dinlənilməyib</string>
+    <string name="no_tracks_added_yet">Kitabxanada heç bir trek tapılmadı</string>
+    <string name="no_favorites_yet">Sevimlilərə trek əlavə edilməyib</string>
+    <string name="add_folder_prompt">Musiqi kitabxananıza qovluq əlavə edin</string>
+    <string name="select_music_folder">Musiqi Qovluğu Seç</string>
+
+    <!-- Library Screen -->
+    <string name="library_title">Musiqi Kitabxanası</string>
+    <string name="tab_all_songs">Bütün Mahnılar</string>
+    <string name="tab_artists">İfaçılar</string>
+    <string name="tab_albums">Albomlar</string>
+    <string name="tab_folders">Qovluqlar</string>
+    <string name="tab_favorites">Sevimlilər</string>
+    <string name="search_hint">Mahnı, ifaçı və ya albom axtar…</string>
+    <string name="sort_by">Sırala</string>
+    <string name="sort_title">Mahnı adı</string>
+    <string name="sort_artist">İfaçı</string>
+    <string name="sort_album">Albom</string>
+    <string name="sort_duration">Müddət</string>
+    <string name="sort_date_added">Əlavə tarixi</string>
+    <string name="sort_size">Fayl ölçüsü</string>
+    <string name="sort_recent">Son dinlənilən</string>
+    <string name="sort_ascending">Artan sıra</string>
+    <string name="sort_descending">Azalan sıra</string>
+
+    <!-- Folder Management -->
+    <string name="manage_folders">Qovluqları İdarə Et</string>
+    <string name="add_folder">Qovluq Əlavə Et</string>
+    <string name="remove_folder">Kitabxanadan Çıxar</string>
+    <string name="rescan_folder">Yenidən Skan Et</string>
+    <string name="rescan_all">Kitabxananı Yenilə</string>
+    <string name="folder_empty">Bu qovluqda dəstəklənən audio fayl yoxdur</string>
+    <string name="play_all">Hamısını Oynat</string>
+    <string name="shuffle_all">Qarışdır</string>
+
+    <!-- File Deletion Dialog -->
+    <string name="delete_file_title">Faylı Cihazdan Sil?</string>
+    <string name="delete_file_message">DİQQƏT: Bu əməliyyat \"%1$s\" faylını cihazınızın yaddaşından HƏMİŞƏLİK siləcək. Bu yalnız AuraEQ-dən deyil, bütünlüklə cihazdan silinmədir.</string>
+    <string name="delete_confirm">Cihazdan Sil</string>
+    <string name="cancel">Ləğv Et</string>
+    <string name="delete_success">Fayl cihazdan uğurla silindi</string>
+    <string name="delete_failed">Fayl silinə bilmədi (icazə xətası)</string>
+
+    <!-- Playlist Management -->
+    <string name="playlists_title">Pleylistlər</string>
+    <string name="create_playlist">Yeni Pleylist</string>
+    <string name="playlist_name_hint">Pleylist adı</string>
+    <string name="rename_playlist">Adını Dəyiş</string>
+    <string name="delete_playlist">Pleylisti Sil</string>
+    <string name="duplicate_playlist">Kopyasını Yarat</string>
+    <string name="add_to_playlist">Pleylistə Əlavə Et</string>
+    <string name="remove_from_playlist">Pleylistdən Çıxar</string>
+    <string name="playlist_empty">Bu pleylistdə mahnı yoxdur</string>
+    <string name="tracks_count">%1$d mahnı</string>
+
+    <!-- Playback Queue & Controls -->
+    <string name="queue_title">Oynatma Növbəsi</string>
+    <string name="play_next">Növbəti Oynat</string>
+    <string name="add_to_queue">Növbəyə Əlavə Et</string>
+    <string name="remove_from_queue">Növbədən Sil</string>
+    <string name="clear_queue">Növbəni Təmizlə</string>
+    <string name="shuffle_on">Qarışıq rejim aktiv</string>
+    <string name="shuffle_off">Qarışıq rejim deaktiv</string>
+    <string name="repeat_off">Təkrarlama deaktiv</string>
+    <string name="repeat_all">Hamısını təkrarlayır</string>
+    <string name="repeat_one">Birini təkrarlayır</string>
+
+    <!-- Now Playing -->
+    <string name="now_playing">İndi Oynadılır</string>
+    <string name="open_equalizer">Ekvalayzeri Aç</string>
+    <string name="open_8d">8D Audio Bölməsi</string>
+    <string name="song_info">Mahnı Məlumatı</string>
+
+    <!-- 8D Audio Dedicated Page -->
+    <string name="page_8d_title">8D Məkan Səsi</string>
+    <string name="page_8d_subtitle">Qulaqlıqlar üçün real vaxt fırlanan stereo məkan emalı</string>
+    <string name="spatial_intensity">Məkan İntensivliyi / Dərinlik</string>
+    <string name="rotation_speed">Fırlanma Sürəti</string>
+    <string name="rotation_speed_value">Dövr: %1$.1f san</string>
+    <string name="direction_clockwise">Saat əqrəbi istiqamətində</string>
+    <string name="direction_counter_clockwise">Saat əqrəbinin əksinə</string>
+    <string name="left_channel">Sol Kanal</string>
+    <string name="right_channel">Sağ Kanal</string>
+    <string name="stereo_pan">Statik Panoram</string>
+    <string name="headphone_mode">Qulaqlıq Rejimi</string>
+    <string name="smooth_panning">Hamar Panning Aktivdir</string>
+    <string name="reset_defaults">İlkin vəziyyətə sıfırla</string>
+    <string name="internal_player_notice">8D məkan effekti birbaşa AuraEQ daxili musiqi pleyerində 100% keyfiyyətlə işləyir.</string>
+
+    <!-- Settings Groups -->
+    <string name="settings_group_audio">Audio və DSP</string>
+    <string name="settings_group_playback">Oynatma və Növbə</string>
+    <string name="settings_group_library">Kitabxana və Qovluqlar</string>
+    <string name="settings_group_appearance">Görünüş və Dizayn</string>
+    <string name="settings_group_language">Dil</string>
+    <string name="settings_group_data">Məlumat və İxrac</string>
+    <string name="settings_group_about">Haqqında</string>
+
+    <string name="setting_external_eq_title">Xarici tətbiqlərə EQ tətbiq et</string>
+    <string name="setting_external_eq_desc">Spotify və ya digər tətbiqlər audio sessiyası açdıqda EQ tətbiq et</string>
+    <string name="setting_resume_playback_title">Oynatmanı davam etdir</string>
+    <string name="setting_resume_playback_desc">Tətbiq açılanda sonuncu mahnının mövqeyini yadda saxla</string>
+    <string name="setting_pause_disconnect_title">Qulaqlıq ayrılanda fasilə</string>
+    <string name="setting_pause_disconnect_desc">Qulaqlıq və ya Bluetooth çıxarıldıqda mahnını avtomatik dayandır</string>
+    <string name="setting_remember_queue_title">Növbəni yadda saxla</string>
+    <string name="setting_remember_queue_desc">Sonuncu oynatma siyahısını bərpa et</string>
+    <string name="setting_rescan_library">Kitabxananı yenidən skan et</string>
+    <string name="setting_clear_artwork">Albom örtüyü keşini təmizlə</string>
+    <string name="setting_clear_history">Oynatma tarixçəsini təmizlə</string>
+    <string name="setting_glass_intensity">Şüşə effektinin intensivliyi</string>
+    <string name="setting_kofi_support">Layihəni dəstəklə (Ko-fi)</string>
+    <string name="setting_github">GitHub Repository</string>
+    <string name="stats_tracks">%1$d mahnı</string>
+    <string name="stats_folders">%1$d qovluq</string>
 </resources>

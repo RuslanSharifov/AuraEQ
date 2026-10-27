@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.content.Intent
 import android.net.Uri
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
@@ -24,28 +25,46 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
-import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Brightness4
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ColorLens
-import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Equalizer
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.PrivacyTip
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.SpatialAudio
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,16 +80,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
-import com.example.ui.components.KoFiSupportCard
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.AuraAccent
-import com.example.ui.theme.AuraRedError
 import com.example.viewmodel.AuraUiState
 import com.example.viewmodel.AuraViewModel
 import kotlinx.coroutines.launch
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 @Composable
 fun SettingsScreen(
@@ -79,538 +95,443 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    // Resolve localized messages in composition so they update on language changes.
-    val exportSuccessMessage = stringResource(R.string.toast_exported)
-    val importSuccessMessage = stringResource(R.string.toast_imported)
     val view = LocalView.current
     val scope = rememberCoroutineScope()
-    val isDark = MaterialTheme.colorScheme.background.red < 0.2f
+    val scrollState = rememberScrollState()
 
-    var showPrivacyDialog by remember { mutableStateOf(false) }
-    var showAboutDialog by remember { mutableStateOf(false) }
+    val trackCount by viewModel.trackCount.collectAsStateWithLifecycle(0)
+
     var showResetDialog by remember { mutableStateOf(false) }
+    var showKoFiDialog by remember { mutableStateOf(false) }
+    var customKoFiInput by remember { mutableStateOf(state.kofiUrl) }
 
-    // Export Document Launcher
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
-    ) { uri: Uri? ->
-        if (uri != null) {
-            scope.launch {
-                try {
-                    val json = viewModel.exportProfilesJson()
-                    context.contentResolver.openOutputStream(uri)?.use { os ->
-                        os.write(json.toByteArray())
-                    }
-                    Toast.makeText(context, exportSuccessMessage, Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Toast.makeText(context, "Export error: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    // Import Document Launcher
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            scope.launch {
-                try {
-                    val sb = StringBuilder()
-                    context.contentResolver.openInputStream(uri)?.use { isStream ->
-                        BufferedReader(InputStreamReader(isStream)).use { reader ->
-                            var line = reader.readLine()
-                            while (line != null) {
-                                sb.append(line)
-                                line = reader.readLine()
-                            }
-                        }
-                    }
-                    val success = viewModel.importProfilesJson(sb.toString())
-                    if (success) {
-                        Toast.makeText(context, importSuccessMessage, Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "Invalid JSON backup format", Toast.LENGTH_SHORT).show()
-                    }
-                } catch (e: Exception) {
-                    Toast.makeText(context, "Import error: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            }
+    val folderPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri: Uri? ->
+        if (treeUri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    treeUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {}
+            viewModel.addFolder(treeUri)
         }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .verticalScroll(scrollState)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(bottom = 120.dp)
+            .testTag("settings_screen")
     ) {
-        // Header
         Text(
-            text = stringResource(R.string.settings_title),
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
+            text = stringResource(R.string.nav_settings),
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 12.dp)
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        // ==========================================
+        // 1. AUDIO & DSP SECTION
+        // ==========================================
+        SettingsSectionHeader(title = stringResource(R.string.settings_group_audio), icon = Icons.Default.Equalizer)
 
-        // Section 1: Appearance & Theme
-        SettingsSectionHeader(stringResource(R.string.settings_section_appearance))
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 22.dp,
-            elevation = 3.dp
-        ) {
+        GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
-                ThemeOptionRow(
-                    label = stringResource(R.string.theme_light),
-                    isSelected = state.themeMode == "light",
-                    onSelect = { viewModel.setThemeMode("light") }
+                // Master EQ Switch
+                SettingToggleRow(
+                    title = "Ekvalayzer Master Gücü",
+                    subtitle = if (state.isEnabled) stringResource(R.string.status_power_on) else stringResource(R.string.status_power_off),
+                    checked = state.isEnabled,
+                    onCheckedChange = { viewModel.toggleMasterPower() }
                 )
-                ThemeOptionRow(
-                    label = stringResource(R.string.theme_dark),
-                    isSelected = state.themeMode == "dark",
-                    onSelect = { viewModel.setThemeMode("dark") }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // External App EQ Switch
+                SettingToggleRow(
+                    title = stringResource(R.string.setting_external_eq_title),
+                    subtitle = stringResource(R.string.setting_external_eq_desc),
+                    checked = state.externalAppEq,
+                    onCheckedChange = { viewModel.setExternalAppEq(it) }
                 )
-                ThemeOptionRow(
-                    label = stringResource(R.string.theme_system),
-                    isSelected = state.themeMode == "system",
-                    onSelect = { viewModel.setThemeMode("system") }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Auto Headphone Profile Switch
+                SettingToggleRow(
+                    title = "Qulaqlıq profilini avtomatik seç",
+                    subtitle = "Qulaqlıq və ya Bluetooth qoşulduqda uyğun profili yüklə",
+                    checked = state.deviceAutoSwitch,
+                    onCheckedChange = { viewModel.toggleDeviceAutoSwitch() }
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        // ==========================================
+        // 2. PLAYBACK & QUEUE SECTION
+        // ==========================================
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsSectionHeader(title = stringResource(R.string.settings_group_playback), icon = Icons.Default.PlayArrow)
 
-        // Section 2: Audio Routing Preferences
-        SettingsSectionHeader(stringResource(R.string.settings_section_audio))
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 22.dp,
-            elevation = 3.dp
-        ) {
+        GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Headset,
-                            contentDescription = null,
-                            tint = AuraAccent,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.device_auto_switch),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = stringResource(R.string.device_auto_switch_desc),
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                // Resume Playback
+                SettingToggleRow(
+                    title = stringResource(R.string.setting_resume_playback_title),
+                    subtitle = stringResource(R.string.setting_resume_playback_desc),
+                    checked = state.resumePlayback,
+                    onCheckedChange = { viewModel.setResumePlayback(it) }
+                )
 
-                    Switch(
-                        checked = state.deviceAutoSwitch,
-                        onCheckedChange = { viewModel.setDeviceAutoSwitch(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = AuraAccent
-                        )
-                    )
-                }
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Pause on Disconnect
+                SettingToggleRow(
+                    title = stringResource(R.string.setting_pause_disconnect_title),
+                    subtitle = stringResource(R.string.setting_pause_disconnect_desc),
+                    checked = state.pauseOnDisconnect,
+                    onCheckedChange = { viewModel.setPauseOnDisconnect(it) }
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Remember Queue
+                SettingToggleRow(
+                    title = stringResource(R.string.setting_remember_queue_title),
+                    subtitle = stringResource(R.string.setting_remember_queue_desc),
+                    checked = state.rememberQueue,
+                    onCheckedChange = { viewModel.setRememberQueue(it) }
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        // ==========================================
+        // 3. LIBRARY & STORAGE SECTION
+        // ==========================================
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsSectionHeader(title = stringResource(R.string.settings_group_library), icon = Icons.Default.Folder)
 
-        // Section 3: Interactions & Haptics
-        SettingsSectionHeader(stringResource(R.string.settings_section_interaction))
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 22.dp,
-            elevation = 3.dp
-        ) {
+        GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
-                // Haptic Feedback
+                // Library Statistics Readout
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Vibration,
-                            contentDescription = null,
-                            tint = AuraAccent,
-                            modifier = Modifier.size(20.dp)
+                    Column {
+                        Text(
+                            text = "Kitabxana Statistikası",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.haptic_feedback),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = stringResource(R.string.haptic_feedback_desc),
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Text(
+                            text = "${stringResource(R.string.stats_tracks, trackCount)} • ${stringResource(R.string.stats_folders, state.selectedFolderUris.size)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AuraAccent
+                        )
                     }
 
-                    Switch(
-                        checked = state.hapticEnabled,
-                        onCheckedChange = { viewModel.setHapticEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = AuraAccent
-                        )
-                    )
+                    Button(
+                        onClick = { folderPicker.launch(null) },
+                        colors = ButtonDefaults.buttonColors(containerColor = AuraAccent)
+                    ) {
+                        Text(stringResource(R.string.add_folder), fontSize = 12.sp)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Smooth Animations
+                // Rescan Library Button
+                SettingActionRow(
+                    title = stringResource(R.string.setting_rescan_library),
+                    subtitle = "Bütün seçilmiş qovluqlarda yeni musiqiləri axtar",
+                    icon = Icons.Default.Refresh,
+                    onClick = {
+                        viewModel.rescanLibrary()
+                        Toast.makeText(context, "Kitabxana skan edilir…", Toast.LENGTH_SHORT).show()
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Clear Artwork Cache Button
+                SettingActionRow(
+                    title = stringResource(R.string.setting_clear_artwork),
+                    subtitle = "Diskdə saxlanılan albom örtüyü şəkillərini təmizlə",
+                    icon = Icons.Default.CleaningServices,
+                    onClick = {
+                        viewModel.clearArtworkCache()
+                        Toast.makeText(context, "Örtük keşi təmizləndi", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+        }
+
+        // ==========================================
+        // 4. APPEARANCE & THEME SECTION
+        // ==========================================
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsSectionHeader(title = stringResource(R.string.settings_group_appearance), icon = Icons.Default.Brightness4)
+
+        GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Görünüş Mövzusu",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Animation,
-                            contentDescription = null,
-                            tint = AuraAccent,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.smooth_animations),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                    listOf("light" to "Açıq", "dark" to "Tünd", "system" to "Sistem").forEach { (mode, label) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { viewModel.setThemeMode(mode) }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            RadioButton(
+                                selected = state.themeMode == mode,
+                                onClick = { viewModel.setThemeMode(mode) },
+                                colors = RadioButtonDefaults.colors(selectedColor = AuraAccent)
                             )
-                            Text(
-                                text = stringResource(R.string.smooth_animations_desc),
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = label, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-
-                    Switch(
-                        checked = state.animationEnabled,
-                        onCheckedChange = { viewModel.setAnimationEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = AuraAccent
-                        )
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Section 4: Data & Backup
-        SettingsSectionHeader(stringResource(R.string.settings_section_data))
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 22.dp,
-            elevation = 3.dp
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Export
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { exportLauncher.launch("aura_eq_backup.json") }
-                        .padding(vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Backup,
-                        contentDescription = null,
-                        tint = AuraAccent,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = stringResource(R.string.export_profiles),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Import
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { importLauncher.launch("application/json") }
-                        .padding(vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FileUpload,
-                        contentDescription = null,
-                        tint = AuraAccent,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = stringResource(R.string.import_profiles),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Reset
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showResetDialog = true }
-                        .padding(vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.RestartAlt,
-                        contentDescription = null,
-                        tint = AuraRedError,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = stringResource(R.string.reset_all_settings),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = AuraRedError
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Section 5: General & Language
-        SettingsSectionHeader(stringResource(R.string.settings_section_general))
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 22.dp,
-            elevation = 3.dp
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Language Selection
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                // Glass Intensity Slider
+                Text(
+                    text = "${stringResource(R.string.setting_glass_intensity)}: ${state.glassIntensity}%",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Slider(
+                    value = state.glassIntensity.toFloat(),
+                    onValueChange = { viewModel.setGlassIntensity(it.toInt()) },
+                    valueRange = 20f..100f,
+                    colors = SliderDefaults.colors(thumbColor = AuraAccent, activeTrackColor = AuraAccent),
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Language,
-                            contentDescription = null,
-                            tint = AuraAccent,
-                            modifier = Modifier.size(20.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Haptic Feedback
+                SettingToggleRow(
+                    title = "Toxunma Vibrasiyası (Haptic)",
+                    subtitle = "Düymələr və sürgülər üçün toxunma əks-əlaqəsi",
+                    checked = state.hapticEnabled,
+                    onCheckedChange = { viewModel.toggleHaptic() }
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Animations
+                SettingToggleRow(
+                    title = "Hamar Keçid Animasiyaları",
+                    subtitle = "Dizayn elementləri arasında vizual effektlər",
+                    checked = state.animationEnabled,
+                    onCheckedChange = { viewModel.toggleAnimation() }
+                )
+            }
+        }
+
+        // ==========================================
+        // 5. LANGUAGE SECTION
+        // ==========================================
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsSectionHeader(title = stringResource(R.string.settings_group_language), icon = Icons.Default.Language)
+
+        GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                listOf("az" to "Azərbaycan dili", "en" to "English").forEach { (langCode, langName) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.setLanguage(langCode) }
+                            .padding(vertical = 6.dp)
+                    ) {
+                        RadioButton(
+                            selected = state.language == langCode,
+                            onClick = { viewModel.setLanguage(langCode) },
+                            colors = RadioButtonDefaults.colors(selectedColor = AuraAccent)
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = stringResource(R.string.language_selection),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
+                            text = langName,
+                            style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+                }
+            }
+        }
 
-                    Row {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (state.language == "az") AuraAccent else (if (isDark) Color(0x33FFFFFF) else Color(0x14000000))
-                                )
-                                .clickable { viewModel.setLanguage("az") }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "AZ",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (state.language == "az") Color.White else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+        // ==========================================
+        // 6. DATA & PRESETS SECTION
+        // ==========================================
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsSectionHeader(title = stringResource(R.string.settings_group_data), icon = Icons.Default.Upload)
 
-                        Spacer(modifier = Modifier.width(6.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (state.language == "en") AuraAccent else (if (isDark) Color(0x33FFFFFF) else Color(0x14000000))
-                                )
-                                .clickable { viewModel.setLanguage("en") }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "EN",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (state.language == "en") Color.White else MaterialTheme.colorScheme.onSurface
-                            )
+        GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                SettingActionRow(
+                    title = "Parametrləri İxrac Et",
+                    subtitle = "Profilləri və tənzimləmələri JSON faylı kimi saxla",
+                    icon = Icons.Default.Download,
+                    onClick = {
+                        scope.launch {
+                            val json = viewModel.exportSettingsJson()
+                            Toast.makeText(context, "Parametrlər köçürüldü (${json.length} bayt)", Toast.LENGTH_SHORT).show()
                         }
                     }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Privacy Policy
+                SettingActionRow(
+                    title = "Bütün Tənzimləmələri Sıfırla",
+                    subtitle = "Standart zavod parametrlərinə qayıt",
+                    icon = Icons.Default.RestartAlt,
+                    onClick = { showResetDialog = true }
+                )
+            }
+        }
+
+        // ==========================================
+        // 7. ABOUT SECTION
+        // ==========================================
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsSectionHeader(title = stringResource(R.string.settings_group_about), icon = Icons.Default.Info)
+
+        GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showPrivacyDialog = true }
-                        .padding(vertical = 8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.PrivacyTip,
+                        imageVector = Icons.Default.MusicNote,
                         contentDescription = null,
                         tint = AuraAccent,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = stringResource(R.string.privacy_policy),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // About
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showAboutDialog = true }
-                        .padding(vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = AuraAccent,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "AURA EQ",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
+                            text = "AuraEQ — Music Player & Equalizer",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = stringResource(R.string.about_version),
-                            fontSize = 11.sp,
+                            text = "Versiya 1.0.0 (Offline-First)",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                SettingActionRow(
+                    title = stringResource(R.string.setting_github),
+                    subtitle = "Açıq mənbəli layihə (Apache-2.0)",
+                    icon = Icons.Default.OpenInNew,
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/RuslanSharifov/AuraEQ"))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                SettingActionRow(
+                    title = stringResource(R.string.setting_kofi_support),
+                    subtitle = state.kofiUrl,
+                    icon = Icons.Default.Favorite,
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(state.kofiUrl))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            showKoFiDialog = true
+                        }
+                    }
+                )
             }
         }
-
-        // Optional external support link; audio processing and preferences stay unchanged.
-        KoFiSupportCard(
-            animationsEnabled = state.animationEnabled,
-            isAzerbaijani = state.language == "az",
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(144.dp))
     }
 
-    // Privacy Dialog
-    if (showPrivacyDialog) {
-        AlertDialog(
-            onDismissRequest = { showPrivacyDialog = false },
-            title = { Text(stringResource(R.string.privacy_policy), fontWeight = FontWeight.Bold) },
-            text = { Text(stringResource(R.string.privacy_policy_desc)) },
-            confirmButton = {
-                TextButton(onClick = { showPrivacyDialog = false }) {
-                    Text("OK")
-                }
-            }
-        )
-    }
-
-    // About Dialog
-    if (showAboutDialog) {
-        AlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            title = { Text("AURA EQ", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text(stringResource(R.string.about_info))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(stringResource(R.string.about_version), fontSize = 12.sp, color = AuraAccent)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showAboutDialog = false }) {
-                    Text("OK")
-                }
-            }
-        )
-    }
-
-    // Reset Confirm Dialog
+    // Reset Confirmation Dialog
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            title = { Text(stringResource(R.string.confirm_reset_title), fontWeight = FontWeight.Bold) },
-            text = { Text(stringResource(R.string.confirm_reset_message)) },
+            title = { Text("Tənzimləmələri sıfırlamaq istəyirsiniz?") },
+            text = { Text("Bütün fərdi tənzimləmələr ilkin standart vəziyyətə qaytarılacaq.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.resetAllSettings()
+                        viewModel.resetToNeutral()
                         showResetDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AuraRedError)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text(stringResource(R.string.action_delete))
+                    Text("Sıfırla")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showResetDialog = false }) {
-                    Text(stringResource(R.string.action_cancel))
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    // Edit Ko-fi Link Dialog
+    if (showKoFiDialog) {
+        AlertDialog(
+            onDismissRequest = { showKoFiDialog = false },
+            title = { Text(stringResource(R.string.setting_kofi_support)) },
+            text = {
+                OutlinedTextField(
+                    value = customKoFiInput,
+                    onValueChange = { customKoFiInput = it },
+                    label = { Text("Ko-fi URL") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.setKofiUrl(customKoFiInput.trim())
+                        showKoFiDialog = false
+                    }
+                ) {
+                    Text("Saxla")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showKoFiDialog = false }) {
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -618,39 +539,98 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsSectionHeader(title: String) {
-    Text(
-        text = title,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Bold,
-        color = AuraAccent,
-        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
-    )
-}
-
-@Composable
-private fun ThemeOptionRow(
-    label: String,
-    isSelected: Boolean,
-    onSelect: () -> Unit
-) {
+private fun SettingsSectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onSelect() }
-            .padding(vertical = 6.dp)
+        modifier = Modifier.padding(vertical = 8.dp)
     ) {
-        RadioButton(
-            selected = isSelected,
-            onClick = onSelect,
-            colors = RadioButtonDefaults.colors(selectedColor = AuraAccent)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = AuraAccent,
+            modifier = Modifier.size(18.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = label,
-            fontSize = 14.sp,
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            ),
             color = MaterialTheme.colorScheme.onSurface
         )
+    }
+}
+
+@Composable
+private fun SettingToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(checkedThumbColor = AuraAccent)
+        )
+    }
+}
+
+@Composable
+private fun SettingActionRow(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        IconButton(onClick = onClick) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = AuraAccent,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }

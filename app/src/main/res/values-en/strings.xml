@@ -3,9 +3,10 @@
     <string name="app_tagline">Premium Android Equalizer</string>
 
     <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_library">Library</string>
+    <string name="nav_playlists">Playlists</string>
     <string name="nav_equalizer">Equalizer</string>
-    <string name="nav_apps">Apps</string>
-    <string name="nav_presets">Presets</string>
     <string name="nav_settings">Settings</string>
 
     <!-- Equalizer Screen -->
@@ -163,4 +164,127 @@
     <string name="external_8d_no_signal">No audio signal: the source is silent or this app blocks capture (e.g. Spotify). Original playback is unaffected.</string>
     <string name="spatial_expand">Expand 8D panel</string>
     <string name="spatial_collapse">Collapse 8D panel</string>
+
+    <!-- Music Player & Library -->
+    <string name="home_title">Welcome Back</string>
+    <string name="home_subtitle">AuraEQ Music Player &amp; Equalizer</string>
+    <string name="recently_played">Recently Played</string>
+    <string name="recently_added">Recently Added</string>
+    <string name="favorites">Favorites</string>
+    <string name="quick_folders">Folders</string>
+    <string name="active_eq_preset">Active EQ Preset</string>
+    <string name="no_tracks_played_yet">No tracks played yet</string>
+    <string name="no_tracks_added_yet">No music tracks found in library</string>
+    <string name="no_favorites_yet">No favorite tracks added yet</string>
+    <string name="add_folder_prompt">Add a folder to scan for music</string>
+    <string name="select_music_folder">Select Music Folder</string>
+
+    <!-- Library Screen -->
+    <string name="library_title">Music Library</string>
+    <string name="tab_all_songs">All Songs</string>
+    <string name="tab_artists">Artists</string>
+    <string name="tab_albums">Albums</string>
+    <string name="tab_folders">Folders</string>
+    <string name="tab_favorites">Favorites</string>
+    <string name="search_hint">Search songs, artists, or albums…</string>
+    <string name="sort_by">Sort By</string>
+    <string name="sort_title">Song title</string>
+    <string name="sort_artist">Artist</string>
+    <string name="sort_album">Album</string>
+    <string name="sort_duration">Duration</string>
+    <string name="sort_date_added">Date added</string>
+    <string name="sort_size">File size</string>
+    <string name="sort_recent">Recently played</string>
+    <string name="sort_ascending">Ascending</string>
+    <string name="sort_descending">Descending</string>
+
+    <!-- Folder Management -->
+    <string name="manage_folders">Manage Folders</string>
+    <string name="add_folder">Add Folder</string>
+    <string name="remove_folder">Remove From Library</string>
+    <string name="rescan_folder">Rescan Folder</string>
+    <string name="rescan_all">Refresh Library</string>
+    <string name="folder_empty">No supported audio files in this folder</string>
+    <string name="play_all">Play All</string>
+    <string name="shuffle_all">Shuffle</string>
+
+    <!-- File Deletion Dialog -->
+    <string name="delete_file_title">Delete File From Device?</string>
+    <string name="delete_file_message">WARNING: This will PERMANENTLY DELETE \"%1$s\" from your device storage. This deletes the actual file, not just from AuraEQ.</string>
+    <string name="delete_confirm">Delete From Device</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete_success">File deleted from device successfully</string>
+    <string name="delete_failed">Could not delete file (permission denied)</string>
+
+    <!-- Playlist Management -->
+    <string name="playlists_title">Playlists</string>
+    <string name="create_playlist">New Playlist</string>
+    <string name="playlist_name_hint">Playlist name</string>
+    <string name="rename_playlist">Rename</string>
+    <string name="delete_playlist">Delete Playlist</string>
+    <string name="duplicate_playlist">Duplicate</string>
+    <string name="add_to_playlist">Add to Playlist</string>
+    <string name="remove_from_playlist">Remove from Playlist</string>
+    <string name="playlist_empty">No tracks in this playlist</string>
+    <string name="tracks_count">%1$d songs</string>
+
+    <!-- Playback Queue & Controls -->
+    <string name="queue_title">Playback Queue</string>
+    <string name="play_next">Play Next</string>
+    <string name="add_to_queue">Add to Queue</string>
+    <string name="remove_from_queue">Remove from Queue</string>
+    <string name="clear_queue">Clear Queue</string>
+    <string name="shuffle_on">Shuffle is On</string>
+    <string name="shuffle_off">Shuffle is Off</string>
+    <string name="repeat_off">Repeat is Off</string>
+    <string name="repeat_all">Repeat All</string>
+    <string name="repeat_one">Repeat Current Track</string>
+
+    <!-- Now Playing -->
+    <string name="now_playing">Now Playing</string>
+    <string name="open_equalizer">Open Equalizer</string>
+    <string name="open_8d">8D Audio Section</string>
+    <string name="song_info">Song Info</string>
+
+    <!-- 8D Audio Dedicated Page -->
+    <string name="page_8d_title">8D Spatial Audio</string>
+    <string name="page_8d_subtitle">Real-time rotating binaural spatial audio for headphones</string>
+    <string name="spatial_intensity">Spatial Intensity / Depth</string>
+    <string name="rotation_speed">Rotation Speed</string>
+    <string name="rotation_speed_value">Period: %1$.1f s</string>
+    <string name="direction_clockwise">Clockwise</string>
+    <string name="direction_counter_clockwise">Counter-Clockwise</string>
+    <string name="left_channel">Left Channel</string>
+    <string name="right_channel">Right Channel</string>
+    <string name="stereo_pan">Static Pan</string>
+    <string name="headphone_mode">Headphone Mode</string>
+    <string name="smooth_panning">Smooth Panning Active</string>
+    <string name="reset_defaults">Reset to Defaults</string>
+    <string name="internal_player_notice">8D spatial processing works natively on all AuraEQ playback at 100% quality.</string>
+
+    <!-- Settings Groups -->
+    <string name="settings_group_audio">Audio &amp; DSP</string>
+    <string name="settings_group_playback">Playback &amp; Queue</string>
+    <string name="settings_group_library">Library &amp; Storage</string>
+    <string name="settings_group_appearance">Appearance &amp; Theme</string>
+    <string name="settings_group_language">Language</string>
+    <string name="settings_group_data">Data &amp; Presets</string>
+    <string name="settings_group_about">About</string>
+
+    <string name="setting_external_eq_title">Apply EQ to other apps</string>
+    <string name="setting_external_eq_desc">Apply EQ when Spotify or other apps expose an audio session</string>
+    <string name="setting_resume_playback_title">Resume playback</string>
+    <string name="setting_resume_playback_desc">Remember last track position on launch</string>
+    <string name="setting_pause_disconnect_title">Pause on disconnect</string>
+    <string name="setting_pause_disconnect_desc">Pause playback when headphones or Bluetooth disconnect</string>
+    <string name="setting_remember_queue_title">Remember queue</string>
+    <string name="setting_remember_queue_desc">Restore last playback queue</string>
+    <string name="setting_rescan_library">Rescan music library</string>
+    <string name="setting_clear_artwork">Clear artwork cache</string>
+    <string name="setting_clear_history">Clear playback history</string>
+    <string name="setting_glass_intensity">Glassmorphism Intensity</string>
+    <string name="setting_kofi_support">Support on Ko-fi</string>
+    <string name="setting_github">GitHub Repository</string>
+    <string name="stats_tracks">%1$d songs</string>
+    <string name="stats_folders">%1$d folders</string>
 </resources>

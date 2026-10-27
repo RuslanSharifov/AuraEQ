@@ -1,6 +1,6 @@
 {
   "name": "AURA EQ",
-  "description": "Premium Android Sound Equalizer with glassmorphism design, real audio session processing, custom presets, and device profiles.",
+  "description": "Premium Android Music Player & Equalizer with glassmorphism design, real audio session processing, 8D spatial audio, custom playlists, and folder library.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

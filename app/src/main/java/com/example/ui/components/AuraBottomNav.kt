@@ -53,15 +53,21 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.glass.GlassStyle
 import dev.chrisbanes.haze.glass.hazeGlass
 
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.QueueMusic
+
 enum class AuraTab(
     val route: String,
     val titleRes: Int,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 ) {
+    HOME("home", R.string.nav_home, Icons.Filled.Home, Icons.Outlined.Home),
+    LIBRARY("library", R.string.nav_library, Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),
+    PLAYLISTS("playlists", R.string.nav_playlists, Icons.Filled.QueueMusic, Icons.Outlined.QueueMusic),
     EQUALIZER("equalizer", R.string.nav_equalizer, Icons.Filled.Equalizer, Icons.Outlined.Equalizer),
-    APPS("apps", R.string.nav_apps, Icons.Filled.Apps, Icons.Outlined.Apps),
-    PRESETS("presets", R.string.nav_presets, Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),
     SETTINGS("settings", R.string.nav_settings, Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
@@ -92,8 +98,7 @@ fun AuraBottomNav(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 8.dp)
+            .padding(horizontal = 18.dp, vertical = 6.dp)
     ) {
         Box(
             modifier = Modifier

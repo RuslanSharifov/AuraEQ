@@ -16,6 +16,10 @@ import com.example.data.model.AudioDeviceType
 import com.example.data.model.AudioEngineCapabilities
 import com.example.data.model.EqualizerBand
 import com.example.data.model.EqualizerPreset
+import com.example.data.model.Track
+import com.example.data.repository.Playlist
+import com.example.playback.PlaybackState
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,7 +54,14 @@ data class AuraUiState(
     val language: String = "az",
     val deviceAutoSwitch: Boolean = true,
     val activeAppSessions: Set<String> = emptySet(),
-    val connectedAppPackages: Set<String> = emptySet()
+    val connectedAppPackages: Set<String> = emptySet(),
+    val selectedFolderUris: Set<String> = emptySet(),
+    val externalAppEq: Boolean = false,
+    val resumePlayback: Boolean = true,
+    val rememberQueue: Boolean = true,
+    val pauseOnDisconnect: Boolean = true,
+    val glassIntensity: Int = 80,
+    val kofiUrl: String = "https://ko-fi.com"
 )
 
 class AuraViewModel(application: Application) : AndroidViewModel(application) {
@@ -172,6 +183,48 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             preferences.deviceProfilesFlow.collect { devProfiles ->
                 _uiState.value = _uiState.value.copy(deviceProfiles = devProfiles)
+            }
+        }
+
+        viewModelScope.launch {
+            preferences.folderUrisFlow.collect { uris ->
+                _uiState.value = _uiState.value.copy(selectedFolderUris = uris)
+            }
+        }
+
+        viewModelScope.launch {
+            preferences.externalAppEqFlow.collect { extEq ->
+                _uiState.value = _uiState.value.copy(externalAppEq = extEq)
+            }
+        }
+
+        viewModelScope.launch {
+            preferences.resumePlaybackFlow.collect { resume ->
+                _uiState.value = _uiState.value.copy(resumePlayback = resume)
+            }
+        }
+
+        viewModelScope.launch {
+            preferences.rememberQueueFlow.collect { remQueue ->
+                _uiState.value = _uiState.value.copy(rememberQueue = remQueue)
+            }
+        }
+
+        viewModelScope.launch {
+            preferences.pauseOnDisconnectFlow.collect { pause ->
+                _uiState.value = _uiState.value.copy(pauseOnDisconnect = pause)
+            }
+        }
+
+        viewModelScope.launch {
+            preferences.glassIntensityFlow.collect { intensity ->
+                _uiState.value = _uiState.value.copy(glassIntensity = intensity)
+            }
+        }
+
+        viewModelScope.launch {
+            preferences.kofiUrlFlow.collect { url ->
+                _uiState.value = _uiState.value.copy(kofiUrl = url)
             }
         }
 
@@ -315,6 +368,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun updateVirtualizer(value: Int) {
         val newValue = value.coerceIn(0, 1000)
         audioEffectManager.setVirtualizer(newValue)
+        com.example.playback.AuraMediaSessionService.instance?.surround3dProcessor?.update(newValue, newValue > 0)
         _uiState.value = _uiState.value.copy(virtualizer = newValue)
         virtualizerSaveJob?.cancel()
         virtualizerSaveJob = viewModelScope.launch {
@@ -326,6 +380,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun setSpatialSettings(value: SpatialSettings) {
         val updated = value.sanitized()
         _uiState.value = _uiState.value.copy(spatialSettings = updated)
+        app.playbackRepository.updateSpatialSettings(updated)
         External8dCaptureService.current?.updateSettings(updated, _uiState.value.isEnabled)
         spatialSaveJob?.cancel()
         spatialSaveJob = viewModelScope.launch {
@@ -339,6 +394,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         spatialSaveJob?.cancel()
         val defaults = SpatialSettings()
         _uiState.value = _uiState.value.copy(spatialSettings = defaults)
+        app.playbackRepository.updateSpatialSettings(defaults)
         External8dCaptureService.current?.updateSettings(defaults, _uiState.value.isEnabled)
         viewModelScope.launch { preferences.saveSpatialSettings(defaults) }
     }
@@ -349,6 +405,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         audioEffectManager.setBassBoost(0)
         audioEffectManager.setTreble(0)
         audioEffectManager.setVirtualizer(0)
+        app.playbackRepository.updateSpatialSettings(SpatialSettings())
+        com.example.playback.AuraMediaSessionService.instance?.surround3dProcessor?.update(0, false)
         External8dCaptureService.current?.updateSettings(SpatialSettings(), _uiState.value.isEnabled)
         _uiState.value = _uiState.value.copy(
             activePresetId = "flat",
@@ -460,6 +518,26 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             preferences.setDeviceAutoSwitch(enabled)
         }
+    }
+
+    fun toggleDeviceAutoSwitch() {
+        setDeviceAutoSwitch(!_uiState.value.deviceAutoSwitch)
+    }
+
+    fun toggleHaptic() {
+        setHapticEnabled(!_uiState.value.hapticEnabled)
+    }
+
+    fun toggleAnimation() {
+        setAnimationEnabled(!_uiState.value.animationEnabled)
+    }
+
+    suspend fun exportSettingsJson(): String {
+        return preferences.exportJson()
+    }
+
+    fun deleteCustomPreset(preset: EqualizerPreset) {
+        deleteCustomPreset(preset.id)
     }
 
     fun resetAllSettings() {
@@ -582,8 +660,215 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ==========================================
+    // MUSIC PLAYER INTEGRATION
+    // ==========================================
+
+    val playbackState: StateFlow<PlaybackState> = app.playbackRepository.playbackState
+    val allTracks: Flow<List<Track>> = app.musicLibraryRepository.allTracksFlow
+    val favoriteTracks: Flow<List<Track>> = app.musicLibraryRepository.favoriteTracksFlow
+    val recentTracks: Flow<List<Track>> = app.musicLibraryRepository.recentTracksFlow
+    val recentlyAddedTracks: Flow<List<Track>> = app.musicLibraryRepository.recentlyAddedTracksFlow
+    val trackCount: Flow<Int> = app.musicLibraryRepository.trackCountFlow
+    val playlists: Flow<List<Playlist>> = app.playlistRepository.allPlaylistsFlow
+
+    fun getPlaylistTracks(playlistId: Long): Flow<List<Track>> {
+        return app.playlistRepository.getPlaylistTracksFlow(playlistId)
+    }
+
+    fun playTrack(track: Track, queue: List<Track> = emptyList()) {
+        val q = if (queue.isNotEmpty()) queue else listOf(track)
+        app.playbackRepository.playTrack(track, q)
+    }
+
+    fun playAll(tracks: List<Track>, startIndex: Int = 0) {
+        app.playbackRepository.playAll(tracks, startIndex)
+    }
+
+    fun shuffleAll(tracks: List<Track>) {
+        app.playbackRepository.shuffleAll(tracks)
+    }
+
+    fun playNext(track: Track) {
+        app.playbackRepository.playNext(track)
+    }
+
+    fun addToQueue(track: Track) {
+        app.playbackRepository.addToQueue(track)
+    }
+
+    fun removeFromQueue(index: Int) {
+        app.playbackRepository.removeFromQueue(index)
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        app.playbackRepository.moveQueueItem(fromIndex, toIndex)
+    }
+
+    fun clearQueue() {
+        app.playbackRepository.clearQueue()
+    }
+
+    fun togglePlayPause() {
+        app.playbackRepository.togglePlayPause()
+    }
+
+    fun seekTo(positionMs: Long) {
+        app.playbackRepository.seekTo(positionMs)
+    }
+
+    fun skipToNext() {
+        app.playbackRepository.skipToNext()
+    }
+
+    fun skipToPrevious() {
+        app.playbackRepository.skipToPrevious()
+    }
+
+    fun toggleRepeatMode() {
+        app.playbackRepository.toggleRepeatMode()
+    }
+
+    fun toggleShuffle() {
+        app.playbackRepository.toggleShuffle()
+    }
+
+    // ==========================================
+    // LIBRARY & FOLDER MANAGEMENT
+    // ==========================================
+
+    fun addFolder(uri: Uri) {
+        viewModelScope.launch {
+            app.musicLibraryRepository.addFolder(uri)
+        }
+    }
+
+    fun removeFolder(folderUriString: String) {
+        viewModelScope.launch {
+            app.musicLibraryRepository.removeFolder(folderUriString)
+        }
+    }
+
+    fun rescanLibrary() {
+        viewModelScope.launch {
+            app.musicLibraryRepository.rescanAllFolders()
+        }
+    }
+
+    fun toggleFavorite(track: Track) {
+        viewModelScope.launch {
+            app.musicLibraryRepository.toggleFavorite(track.uriString, track.isFavorite)
+        }
+    }
+
+    fun deleteTrackFromDevice(track: Track, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val result = app.musicLibraryRepository.deleteTrackFromDevice(track.uriString)
+            // If the deleted track is in queue, remove it
+            val q = playbackState.value.queue
+            val idx = q.indexOfFirst { it.uriString == track.uriString }
+            if (idx >= 0) {
+                removeFromQueue(idx)
+            }
+            onResult(result)
+        }
+    }
+
+    fun clearArtworkCache() {
+        app.musicLibraryRepository.clearArtworkCache()
+    }
+
+    // ==========================================
+    // PLAYLIST MANAGEMENT
+    // ==========================================
+
+    fun createPlaylist(name: String, onCreated: (Long) -> Unit = {}) {
+        viewModelScope.launch {
+            val id = app.playlistRepository.createPlaylist(name)
+            onCreated(id)
+        }
+    }
+
+    fun renamePlaylist(id: Long, newName: String) {
+        viewModelScope.launch {
+            app.playlistRepository.renamePlaylist(id, newName)
+        }
+    }
+
+    fun deletePlaylist(id: Long) {
+        viewModelScope.launch {
+            app.playlistRepository.deletePlaylist(id)
+        }
+    }
+
+    fun duplicatePlaylist(id: Long, onCreated: (Long) -> Unit = {}) {
+        viewModelScope.launch {
+            val idCopy = app.playlistRepository.duplicatePlaylist(id)
+            onCreated(idCopy)
+        }
+    }
+
+    fun addTracksToPlaylist(playlistId: Long, trackUris: List<String>) {
+        viewModelScope.launch {
+            app.playlistRepository.addTracksToPlaylist(playlistId, trackUris)
+        }
+    }
+
+    fun removeTrackFromPlaylist(playlistId: Long, trackUri: String) {
+        viewModelScope.launch {
+            app.playlistRepository.removeTrackFromPlaylist(playlistId, trackUri)
+        }
+    }
+
+    fun reorderPlaylist(playlistId: Long, trackUris: List<String>) {
+        viewModelScope.launch {
+            app.playlistRepository.reorderPlaylist(playlistId, trackUris)
+        }
+    }
+
+    // ==========================================
+    // SETTINGS METHODS
+    // ==========================================
+
+    fun setExternalAppEq(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setExternalAppEq(enabled)
+        }
+    }
+
+    fun setResumePlayback(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setResumePlayback(enabled)
+        }
+    }
+
+    fun setRememberQueue(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setRememberQueue(enabled)
+        }
+    }
+
+    fun setPauseOnDisconnect(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setPauseOnDisconnect(enabled)
+        }
+    }
+
+    fun setGlassIntensity(intensity: Int) {
+        viewModelScope.launch {
+            preferences.setGlassIntensity(intensity)
+        }
+    }
+
+    fun setKofiUrl(url: String) {
+        viewModelScope.launch {
+            preferences.setKofiUrl(url)
+        }
+    }
+
     override fun onCleared() {
         cancelPendingSliderSaves()
         super.onCleared()
     }
 }
+

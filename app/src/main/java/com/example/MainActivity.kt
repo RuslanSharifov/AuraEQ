@@ -46,12 +46,21 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.navigationBarsPadding
 import com.example.ui.components.AuraBottomNav
 import com.example.ui.components.AuraTab
 import com.example.ui.components.AuraTopBar
-import com.example.ui.screens.AppsScreen
+import com.example.ui.components.MiniPlayer
 import com.example.ui.screens.EqualizerScreen
-import com.example.ui.screens.PresetsScreen
+import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.LibraryScreen
+import com.example.ui.screens.NowPlayingScreen
+import com.example.ui.screens.PlaylistsScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.AuraBgDark
 import com.example.ui.theme.AuraBgLight
@@ -209,11 +218,17 @@ fun AuraMainScreen(
     onStopExternal8d: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var currentTab by remember { mutableStateOf(AuraTab.EQUALIZER) }
+    val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
+    var currentTab by remember { mutableStateOf(AuraTab.HOME) }
+    var showNowPlaying by remember { mutableStateOf(false) }
 
-    // BackHandler to navigate back to Equalizer tab when on secondary screens
-    BackHandler(enabled = currentTab != AuraTab.EQUALIZER) {
-        currentTab = AuraTab.EQUALIZER
+    // BackHandler to close NowPlaying if open, or return to Home tab when on secondary screens
+    BackHandler(enabled = showNowPlaying || currentTab != AuraTab.HOME) {
+        if (showNowPlaying) {
+            showNowPlaying = false
+        } else {
+            currentTab = AuraTab.HOME
+        }
     }
 
     val isDark = MaterialTheme.colorScheme.background.red < 0.2f
@@ -298,28 +313,77 @@ fun AuraMainScreen(
                         label = "tab_crossfade"
                     ) { tab ->
                         when (tab) {
+                            AuraTab.HOME -> HomeScreen(
+                                state = state,
+                                playbackState = playbackState,
+                                viewModel = viewModel,
+                                onNavigateToEqualizer = { currentTab = AuraTab.EQUALIZER },
+                                onNavigateToLibrary = { currentTab = AuraTab.LIBRARY },
+                                onNavigateToPlaylists = { currentTab = AuraTab.PLAYLISTS },
+                                onOpenNowPlaying = { showNowPlaying = true }
+                            )
+                            AuraTab.LIBRARY -> LibraryScreen(
+                                state = state,
+                                playbackState = playbackState,
+                                viewModel = viewModel
+                            )
+                            AuraTab.PLAYLISTS -> PlaylistsScreen(
+                                viewModel = viewModel
+                            )
                             AuraTab.EQUALIZER -> EqualizerScreen(
                                 state = state,
                                 viewModel = viewModel,
                                 onStartExternal8d = onStartExternal8d,
                                 onStopExternal8d = onStopExternal8d
                             )
-                            AuraTab.APPS -> AppsScreen(state = state, viewModel = viewModel)
-                            AuraTab.PRESETS -> PresetsScreen(state = state, viewModel = viewModel)
-                            AuraTab.SETTINGS -> SettingsScreen(state = state, viewModel = viewModel)
+                            AuraTab.SETTINGS -> SettingsScreen(
+                                state = state,
+                                viewModel = viewModel
+                            )
                         }
                     }
                 }
             }
         }
 
-        AuraBottomNav(
-            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
-            currentTab = currentTab,
-            hapticEnabled = state.hapticEnabled,
-            hazeState = hazeState,
-            onTabSelected = { currentTab = it }
-        )
-    }
+        Column(
+            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
+        ) {
+            MiniPlayer(
+                playbackState = playbackState,
+                hazeState = hazeState,
+                onExpandNowPlaying = { showNowPlaying = true },
+                onTogglePlayPause = { viewModel.togglePlayPause() },
+                onSkipNext = { viewModel.skipToNext() },
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
+            )
+            AuraBottomNav(
+                currentTab = currentTab,
+                hapticEnabled = state.hapticEnabled,
+                hazeState = hazeState,
+                onTabSelected = { currentTab = it }
+            )
+        }
 
+        AnimatedVisibility(
+            visible = showNowPlaying && playbackState.currentTrack != null,
+            enter = slideInVertically(initialOffsetY = { it }),
+            exit = slideOutVertically(targetOffsetY = { it })
+        ) {
+            NowPlayingScreen(
+                state = state,
+                playbackState = playbackState,
+                viewModel = viewModel,
+                onBack = { showNowPlaying = false },
+                onOpenEqualizer = {
+                    showNowPlaying = false
+                    currentTab = AuraTab.EQUALIZER
+                },
+                onOpen8D = {
+                    showNowPlaying = false
+                    currentTab = AuraTab.EQUALIZER
+                }
+            )
+        }
+    }
 }
