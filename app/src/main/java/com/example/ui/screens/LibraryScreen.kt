@@ -273,6 +273,18 @@ fun LibraryScreen(
             }
         }
 
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            androidx.compose.material3.OutlinedButton(onClick = { folderPicker.launch(null) }, modifier = Modifier.weight(1f)) {
+                Text("Qovluq seç", maxLines = 1)
+            }
+            androidx.compose.material3.Button(onClick = { audioPicker.launch(arrayOf("audio/*")) }, modifier = Modifier.weight(1f)) {
+                Text("Musiqi faylları", maxLines = 1)
+            }
+        }
+
         // Tabs
         ScrollableTabRow(
             selectedTabIndex = selectedTabIndex,
@@ -317,7 +329,7 @@ fun LibraryScreen(
                     onPlayAll = { viewModel.playAll(filteredTracks) },
                     onShuffleAll = { viewModel.shuffleAll(filteredTracks) },
                     onMoreClick = { track -> trackForActionMenu = track },
-                    onAddFolder = { audioPicker.launch(arrayOf("audio/*")) }
+                    onAddFolder = { folderPicker.launch(null) }
                 )
             }
             1 -> {
@@ -423,7 +435,7 @@ fun LibraryScreen(
                 FoldersView(
                     selectedFolderUris = state.selectedFolderUris,
                     allTracks = allTracks,
-                    onAddFolder = { audioPicker.launch(arrayOf("audio/*")) },
+                    onAddFolder = { folderPicker.launch(null) },
                     onRemoveFolder = { viewModel.removeFolder(it) },
                     onRescanLibrary = { viewModel.rescanLibrary() },
                     onPlayFolder = { fUri ->
