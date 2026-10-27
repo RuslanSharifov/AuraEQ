@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -88,6 +89,18 @@ fun HomeScreen(
     val recentlyAdded by viewModel.recentlyAddedTracks.collectAsStateWithLifecycle(emptyList())
     val favoriteTracks by viewModel.favoriteTracks.collectAsStateWithLifecycle(emptyList())
     val playlists by viewModel.playlists.collectAsStateWithLifecycle(emptyList())
+
+    val audioPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        uris.forEach { uri ->
+            try { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            catch (_: SecurityException) { }
+        }
+        if (uris.isNotEmpty()) viewModel.importAudioFiles(uris) { count ->
+            Toast.makeText(context, "$count musiqi kitabxanaya əlavə edildi", Toast.LENGTH_LONG).show()
+        }
+    }
 
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -237,7 +250,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
-                            onClick = { folderPicker.launch(null) },
+                            onClick = { audioPicker.launch(arrayOf("audio/*")) },
                             colors = ButtonDefaults.buttonColors(containerColor = AuraAccent),
                             modifier = Modifier.testTag("home_add_folder_button")
                         ) {
