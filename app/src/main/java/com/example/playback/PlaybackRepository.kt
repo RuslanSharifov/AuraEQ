@@ -25,25 +25,26 @@ class PlaybackRepository(private val context: Context) {
     }
 
     fun playTrack(track: Track, queue: List<Track>) {
-        val service = ensureServiceRunning()
-        if (service != null) {
-            service.playTrack(track, queue)
-        } else {
-            // Service starting up; attempt again after brief delay or retry
-            val intent = Intent(context, AuraMediaSessionService::class.java)
-            ContextCompat.startForegroundService(context, intent)
-            AuraMediaSessionService.instance?.playTrack(track, queue)
-        }
+        val startIndex = queue.indexOfFirst { it.uriString == track.uriString }.coerceAtLeast(0)
+        playAll(queue.ifEmpty { listOf(track) }, startIndex)
     }
 
     fun playAll(tracks: List<Track>, startIndex: Int = 0) {
-        val service = ensureServiceRunning()
-        service?.playAll(tracks, startIndex)
+        if (tracks.isEmpty()) return
+        val service = AuraMediaSessionService.instance
+        if (service != null) {
+            service.playAll(tracks, startIndex)
+        } else {
+            AuraMediaSessionService.pendingPlayback = tracks to startIndex
+            ensureServiceRunning()
+        }
     }
 
     fun shuffleAll(tracks: List<Track>) {
-        val service = ensureServiceRunning()
-        service?.shuffleAll(tracks)
+        if (tracks.isEmpty()) return
+        val shuffled = tracks.shuffled()
+        playAll(shuffled, 0)
+        AuraMediaSessionService.instance?.toggleShuffle()
     }
 
     fun playNext(track: Track) {
