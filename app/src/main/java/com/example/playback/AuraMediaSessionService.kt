@@ -60,6 +60,10 @@ class AuraMediaSessionService : MediaSessionService() {
         var instance: AuraMediaSessionService? = null
             private set
 
+        // A playback tap may start this service asynchronously. Keep the requested
+        // queue until onCreate has finished constructing the media session.
+        @Volatile internal var pendingPlayback: Pair<List<Track>, Int>? = null
+
         private val _playbackState = MutableStateFlow(PlaybackState())
         val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
     }
@@ -69,6 +73,10 @@ class AuraMediaSessionService : MediaSessionService() {
         instance = this
         initPlayer()
         registerBecomingNoisyReceiver()
+        pendingPlayback?.let { (tracks, index) ->
+            pendingPlayback = null
+            playAll(tracks, index)
+        }
     }
 
     private fun initPlayer() {
@@ -118,9 +126,13 @@ class AuraMediaSessionService : MediaSessionService() {
                     notifyAudioSession(player.audioSessionId)
                 }
 
-                if (state == Player.STATE_ENDED) {
-                    onTrackEnded()
-                }
+                // ExoPlayer handles playlist completion/repeat natively.
+                // Manually seeking/playing here can re-enter STATE_ENDED and crash.
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Log.e(TAG, "Media playback failed", error)
+                _playbackState.value = _playbackState.value.copy(isPlaying = false, isBuffering = false)
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
