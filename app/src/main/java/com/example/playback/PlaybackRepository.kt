@@ -2,7 +2,6 @@ package com.example.playback
 
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.ContextCompat
 import com.example.audio.SpatialSettings
 import com.example.data.model.Track
 import kotlinx.coroutines.flow.StateFlow
@@ -16,11 +15,10 @@ class PlaybackRepository(private val context: Context) {
         if (existing != null) return existing
 
         val intent = Intent(context, AuraMediaSessionService::class.java)
-        try {
-            ContextCompat.startForegroundService(context, intent)
-        } catch (_: Exception) {
-            context.startService(intent)
-        }
+        // MediaSessionService promotes itself when ExoPlayer actually starts playback.
+        // startForegroundService() here causes ForegroundServiceDidNotStartInTimeException
+        // while the service is still preparing a playlist/media session.
+        context.startService(intent)
         return AuraMediaSessionService.instance
     }
 

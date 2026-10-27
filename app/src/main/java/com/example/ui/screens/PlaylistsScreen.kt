@@ -92,10 +92,26 @@ fun PlaylistsScreen(
     val favoriteTracks by viewModel.favoriteTracks.collectAsStateWithLifecycle(emptyList())
 
     var selectedPlaylist by remember { mutableStateOf<Playlist?>(null) }
+    var showingFavorites by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var playlistToRename by remember { mutableStateOf<Playlist?>(null) }
 
-    if (selectedPlaylist != null) {
+    if (showingFavorites) {
+        PlaylistDetailView(
+            playlist = Playlist(-1L, stringResource(R.string.favorites), 0L, 0L),
+            tracks = favoriteTracks,
+            onBack = { showingFavorites = false },
+            onPlayTrack = { viewModel.playTrack(it, favoriteTracks) },
+            onPlayAll = { viewModel.playAll(favoriteTracks) },
+            onShuffleAll = { viewModel.shuffleAll(favoriteTracks) },
+            onRemoveTrack = { viewModel.toggleFavorite(it) },
+            onMoveTrack = { _, _ -> },
+            onDeletePlaylist = {},
+            onDuplicatePlaylist = {},
+            onRenamePlaylist = {},
+            isFavorites = true
+        )
+    } else if (selectedPlaylist != null) {
         // Detailed Playlist View
         val playlist = selectedPlaylist!!
         val playlistTracks by viewModel.getPlaylistTracks(playlist.id).collectAsStateWithLifecycle(emptyList())
@@ -182,10 +198,7 @@ fun PlaylistsScreen(
                             .fillMaxWidth()
                             .padding(bottom = 12.dp)
                             .clickable {
-                                // Open favorite tracks directly or play
-                                if (favoriteTracks.isNotEmpty()) {
-                                    viewModel.playAll(favoriteTracks)
-                                }
+                                showingFavorites = true
                             }
                             .testTag("favorites_playlist_card")
                     ) {
@@ -486,7 +499,8 @@ private fun PlaylistDetailView(
     onMoveTrack: (Int, Int) -> Unit,
     onDeletePlaylist: () -> Unit,
     onDuplicatePlaylist: () -> Unit,
-    onRenamePlaylist: () -> Unit
+    onRenamePlaylist: () -> Unit,
+    isFavorites: Boolean = false
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -522,7 +536,7 @@ private fun PlaylistDetailView(
                 )
             }
 
-            Box {
+            if (!isFavorites) Box {
                 IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "Options")
                 }
@@ -656,7 +670,7 @@ private fun PlaylistDetailView(
                         }
 
                         // Reorder controls
-                        if (index > 0) {
+                        if (!isFavorites && index > 0) {
                             IconButton(
                                 onClick = { onMoveTrack(index, index - 1) },
                                 modifier = Modifier.size(28.dp)
@@ -664,7 +678,7 @@ private fun PlaylistDetailView(
                                 Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Up", modifier = Modifier.size(18.dp))
                             }
                         }
-                        if (index < tracks.size - 1) {
+                        if (!isFavorites && index < tracks.size - 1) {
                             IconButton(
                                 onClick = { onMoveTrack(index, index + 1) },
                                 modifier = Modifier.size(28.dp)
