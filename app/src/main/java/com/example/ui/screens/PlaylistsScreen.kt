@@ -104,7 +104,7 @@ fun PlaylistsScreen(
             onPlayTrack = { viewModel.playTrack(it, favoriteTracks) },
             onPlayAll = { viewModel.playAll(favoriteTracks) },
             onShuffleAll = { viewModel.shuffleAll(favoriteTracks) },
-            onRemoveTrack = { viewModel.toggleFavorite(it.uriString) },
+            onRemoveTrack = { viewModel.toggleFavorite(it) },
             onMoveTrack = { _, _ -> },
             onDeletePlaylist = {},
             onDuplicatePlaylist = {},
