@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,6 +40,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -76,6 +82,10 @@ fun PlaylistsScreen(
     viewModel: AuraViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val spotifyStore = remember(context) { context.getSharedPreferences("aura_spotify_links", android.content.Context.MODE_PRIVATE) }
+    var spotifyPlaylists by remember { mutableStateOf(spotifyStore.getStringSet("playlist_ids", emptySet()).orEmpty().toSet()) }
+    var showSpotifyDialog by remember { mutableStateOf(false) }
     val playlists by viewModel.playlists.collectAsStateWithLifecycle(emptyList())
     val favoriteTracks by viewModel.favoriteTracks.collectAsStateWithLifecycle(emptyList())
 
@@ -136,6 +146,38 @@ fun PlaylistsScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
+                }
+
+                item {
+                    GlassCard(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Spotify playlistləri", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Bağlantını saxla və Spotify tətbiqində dinlə. Spotify musiqilərinin MP3 endirilməsi dəstəklənmir.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(onClick = { showSpotifyDialog = true }) { Text("Spotify playlisti əlavə et") }
+                            spotifyPlaylists.sorted().forEach { id ->
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                                    Text("Spotify • " + id.take(8) + "…", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                    TextButton(onClick = {
+                                        val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse("spotify:playlist:$id"))
+                                        try { context.startActivity(deepLink) }
+                                        catch (_: Exception) {
+                                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://open.spotify.com/playlist/$id"))) }
+                                            catch (_: Exception) { Toast.makeText(context, "Spotify açılmadı", Toast.LENGTH_SHORT).show() }
+                                        }
+                                    }) { Text("Dinlə") }
+                                    TextButton(onClick = {
+                                        spotifyPlaylists = spotifyPlaylists - id
+                                        spotifyStore.edit().putStringSet("playlist_ids", spotifyPlaylists).apply()
+                                    }) { Text("Sil") }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Pinned Built-in "Favorites" Playlist Card
@@ -298,6 +340,41 @@ fun PlaylistsScreen(
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.create_playlist))
             }
         }
+    }
+
+    if (showSpotifyDialog) {
+        var spotifyUrl by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showSpotifyDialog = false },
+            title = { Text("Spotify playlist bağlantısı") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = spotifyUrl,
+                        onValueChange = { spotifyUrl = it },
+                        label = { Text("https://open.spotify.com/playlist/...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Playlist yalnız Spotify vasitəsilə səsləndirilir.", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = Regex("(?:https://open[.]spotify[.]com/playlist/|spotify:playlist:)([A-Za-z0-9]{22})")
+                        .find(spotifyUrl.trim())?.groupValues?.get(1)
+                    if (id == null) {
+                        Toast.makeText(context, "Düzgün Spotify playlist linki yaz", Toast.LENGTH_SHORT).show()
+                    } else {
+                        spotifyPlaylists = spotifyPlaylists + id
+                        spotifyStore.edit().putStringSet("playlist_ids", spotifyPlaylists).apply()
+                        showSpotifyDialog = false
+                    }
+                }) { Text("Əlavə et") }
+            },
+            dismissButton = { TextButton(onClick = { showSpotifyDialog = false }) { Text("Ləğv et") } }
+        )
     }
 
     // Create Playlist Dialog
