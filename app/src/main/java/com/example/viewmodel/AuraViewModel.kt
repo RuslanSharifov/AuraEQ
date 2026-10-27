@@ -365,7 +365,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    @OptIn(androidx.media3.common.util.UnstableApi::class)
+    @androidx.media3.common.util.UnstableApi
     fun updateVirtualizer(value: Int) {
         val newValue = value.coerceIn(0, 1000)
         audioEffectManager.setVirtualizer(newValue)
@@ -400,7 +400,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { preferences.saveSpatialSettings(defaults) }
     }
 
-    @OptIn(androidx.media3.common.util.UnstableApi::class)
+    @androidx.media3.common.util.UnstableApi
     fun resetToNeutral() {
         cancelPendingSliderSaves()
         audioEffectManager.setBandsGains(listOf(0, 0, 0, 0, 0))
