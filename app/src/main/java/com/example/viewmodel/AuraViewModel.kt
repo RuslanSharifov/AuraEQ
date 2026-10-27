@@ -365,6 +365,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    @OptIn(androidx.media3.common.util.UnstableApi::class)
     fun updateVirtualizer(value: Int) {
         val newValue = value.coerceIn(0, 1000)
         audioEffectManager.setVirtualizer(newValue)
