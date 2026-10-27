@@ -744,6 +744,13 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun importAudioFiles(uris: List<Uri>, onImported: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            val count = app.musicLibraryRepository.importAudioFiles(uris)
+            onImported(count)
+        }
+    }
+
     fun removeFolder(folderUriString: String) {
         viewModelScope.launch {
             app.musicLibraryRepository.removeFolder(folderUriString)
