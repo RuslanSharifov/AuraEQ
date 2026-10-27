@@ -64,6 +64,7 @@ data class AuraUiState(
     val kofiUrl: String = "https://ko-fi.com"
 )
 
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as AuraApplication
@@ -365,7 +366,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    @androidx.media3.common.util.UnstableApi
     fun updateVirtualizer(value: Int) {
         val newValue = value.coerceIn(0, 1000)
         audioEffectManager.setVirtualizer(newValue)
@@ -400,7 +400,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { preferences.saveSpatialSettings(defaults) }
     }
 
-    @androidx.media3.common.util.UnstableApi
     fun resetToNeutral() {
         cancelPendingSliderSaves()
         audioEffectManager.setBandsGains(listOf(0, 0, 0, 0, 0))
