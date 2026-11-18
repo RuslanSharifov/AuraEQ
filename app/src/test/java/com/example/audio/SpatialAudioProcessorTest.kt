@@ -25,6 +25,38 @@ class SpatialAudioProcessorTest {
         }
 
     @Test
+    fun pending_mono_format_does_not_change_current_stereo_frames() {
+        val processor = makeProcessor()
+        processor.configure(AudioProcessor.AudioFormat(22050, 1, C.ENCODING_PCM_16BIT))
+        processor.queueInput(input(4000, -3000))
+        val stereo = processor.output
+        assertEquals(4, stereo.remaining())
+        assertEquals(4000, stereo.short.toInt())
+        assertEquals(-3000, stereo.short.toInt())
+
+        processor.flush()
+        val mono = input(1200, -3400)
+        processor.queueInput(mono)
+        val expanded = processor.output
+        assertEquals(0, mono.remaining())
+        assertEquals(8, expanded.remaining())
+        assertEquals(1200, expanded.short.toInt())
+        assertEquals(1200, expanded.short.toInt())
+        assertEquals(-3400, expanded.short.toInt())
+        assertEquals(-3400, expanded.short.toInt())
+    }
+
+    @Test
+    fun spatial_pan_preserves_out_of_phase_stereo() {
+        val processor = makeProcessor()
+        processor.update(SpatialSettings(is8dEnabled = true, mode = "static", staticPan = 50), true)
+        processor.queueInput(input(12000, -12000))
+        val output = processor.output
+        assertEquals(6000, output.short.toInt())
+        assertEquals(-12000, output.short.toInt())
+    }
+
+    @Test
     fun disabled_keeps_stereo_pcm_unchanged() {
         val processor = makeProcessor()
         processor.update(SpatialSettings(mode = "dynamic", leftPercent = 0), false)

@@ -16,6 +16,9 @@ data class PlaybackState(
     val isShuffleEnabled: Boolean = false,
     val audioSessionId: Int = 0
 ) {
+    val showPauseButton: Boolean
+        get() = isPlaying || isBuffering
+
     val progress: Float
         get() = if (durationMs > 0) (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
 

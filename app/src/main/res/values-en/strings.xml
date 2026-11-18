@@ -1,4 +1,5 @@
 <resources>
+    <string name="playback_notification_channel">Music playback</string>
     <string name="app_name">AURA EQ</string>
     <string name="app_tagline">Premium Android Equalizer</string>
 

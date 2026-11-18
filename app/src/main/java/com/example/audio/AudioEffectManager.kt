@@ -8,7 +8,6 @@ import android.media.audiofx.AudioEffect
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
 import android.media.audiofx.Virtualizer
-import android.os.Build
 import android.util.Log
 import com.example.data.model.AudioDeviceType
 import com.example.data.model.AudioEngineCapabilities
@@ -96,23 +95,12 @@ class AudioEffectManager(private val context: Context) {
         var virtualizer: Virtualizer? = null
     ) {
         fun release() {
-            try {
-                equalizer?.enabled = false
-                equalizer?.release()
-            } catch (e: Exception) {
-                Log.w("SessionEffects", "Error releasing equalizer", e)
-            }
-            try {
-                bassBoost?.enabled = false
-                bassBoost?.release()
-            } catch (e: Exception) {
-                Log.w("SessionEffects", "Error releasing bassBoost", e)
-            }
-            try {
-                virtualizer?.enabled = false
-                virtualizer?.release()
-            } catch (e: Exception) {
-                Log.w("SessionEffects", "Error releasing virtualizer", e)
+            for (effect in listOfNotNull(equalizer, bassBoost, virtualizer)) {
+                try {
+                    effect.release()
+                } catch (e: RuntimeException) {
+                    Log.w("SessionEffects", "Error releasing effect on session $sessionId", e)
+                }
             }
         }
     }
@@ -131,8 +119,10 @@ class AudioEffectManager(private val context: Context) {
         profiles: Map<String, AppProfile>,
         presets: List<EqualizerPreset>
     ) {
+        val presetsById = presets.associateBy { it.id }
+        if (appPolicies == profiles && availablePresets == presetsById) return
         appPolicies = profiles.toMap()
-        availablePresets = presets.associateBy { it.id }
+        availablePresets = presetsById
         knownSessionPackages.toMap().forEach { (sessionId, packageName) ->
             if (!AppAudioPolicy.shouldProcess(packageName, appPolicies)) {
                 // Release native objects to guarantee no coloring on excluded apps.
@@ -326,25 +316,33 @@ class AudioEffectManager(private val context: Context) {
 
         try {
             if (sessionEffects.bassBoost == null) {
-                val bb = BassBoost(1000, sessionId)
-                if (bb.strengthSupported) {
-                    bb.setStrength(bassBoostStrength)
+                val bass = BassBoost(1000, sessionId)
+                sessionEffects.bassBoost = bass
+                bass.setControlStatusListener { effect, hasControl ->
+                    synchronized(this@AudioEffectManager) {
+                        if (hasControl && activeEffectSessions[sessionId]?.bassBoost === effect) {
+                            val strength = presetForSession(sessionId)?.bassBoost ?: bassBoostStrength.toInt()
+                            applyBassBoost(sessionEffects, strength.coerceIn(0, 1000).toShort())
+                        }
+                    }
                 }
-                bb.enabled = isEnabled
-                sessionEffects.bassBoost = bb
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to create BassBoost for session $sessionId: ${e.message}")
         }
 
         try {
-            if (sessionEffects.virtualizer == null) {
-                val virt = Virtualizer(1000, sessionId)
-                if (virt.strengthSupported) {
-                    virt.setStrength(virtualizerStrength)
+            if (sessionEffects.virtualizer == null && owner != context.packageName) {
+                val virtualizer = Virtualizer(1000, sessionId)
+                sessionEffects.virtualizer = virtualizer
+                virtualizer.setControlStatusListener { effect, hasControl ->
+                    synchronized(this@AudioEffectManager) {
+                        if (hasControl && activeEffectSessions[sessionId]?.virtualizer === effect) {
+                            val strength = presetForSession(sessionId)?.virtualizer ?: virtualizerStrength.toInt()
+                            applyVirtualizationToSession(sessionEffects, strength.coerceIn(0, 1000).toShort())
+                        }
+                    }
                 }
-                virt.enabled = false
-                sessionEffects.virtualizer = virt
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to create Virtualizer for session $sessionId: ${e.message}")
@@ -378,6 +376,8 @@ class AudioEffectManager(private val context: Context) {
 
     @Synchronized
     fun setMasterEnabled(enabled: Boolean) {
+        if (isEnabled == enabled) return
+        Log.d(TAG, "Master effects enabled=$enabled")
         if (!enabled) {
             this.isEnabled = false
             // Android effects belong to our sessions. Disabling only the master flag
@@ -394,7 +394,9 @@ class AudioEffectManager(private val context: Context) {
 
     @Synchronized
     fun setBandsGains(gains: List<Int>) {
-        this.bandGains = gains.map { it.toShort() }.toMutableList()
+        val next = gains.map { it.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort() }
+        if (bandGains == next) return
+        bandGains = next.toMutableList()
         applyGainsWithTreble()
     }
 
@@ -409,30 +411,39 @@ class AudioEffectManager(private val context: Context) {
 
     @Synchronized
     fun setBassBoost(strength: Int) {
-        this.bassBoostStrength = strength.coerceIn(0, 1000).toShort()
+        val next = strength.coerceIn(0, 1000).toShort()
+        if (bassBoostStrength == next) return
+        bassBoostStrength = next
         activeEffectSessions.values.forEach { session ->
-            if (presetForSession(session.sessionId) == null) {
-                try {
-                    session.bassBoost?.let { effect ->
-                        if (effect.strengthSupported) effect.setStrength(bassBoostStrength)
-                        effect.enabled = isEnabled && bassBoostStrength > 0
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Unable to change bass on session ${session.sessionId}", e)
-                }
-            }
+            if (presetForSession(session.sessionId) == null) applyBassBoost(session, next)
+        }
+    }
+
+    private fun applyBassBoost(session: SessionEffects, strength: Short) {
+        val bass = session.bassBoost ?: return
+        try {
+            if (!bass.hasControl()) return
+            if (bass.strengthSupported) bass.setStrength(strength)
+            val enabled = isEnabled && strength > 0
+            if (bass.enabled != enabled) bass.setEnabled(enabled)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Unable to apply bass on session ${session.sessionId}", e)
         }
     }
 
     @Synchronized
     fun setTreble(value: Int) {
-        this.trebleValue = value.coerceIn(-1000, 1000)
+        val next = value.coerceIn(-1000, 1000)
+        if (trebleValue == next) return
+        trebleValue = next
         applyGainsWithTreble()
     }
 
     @Synchronized
     fun setVirtualizer(strength: Int) {
-        this.virtualizerStrength = strength.coerceIn(0, 1000).toShort()
+        val next = strength.coerceIn(0, 1000).toShort()
+        if (virtualizerStrength == next) return
+        virtualizerStrength = next
         activeEffectSessions.values.forEach { session ->
             val currentStrength = (presetForSession(session.sessionId)?.virtualizer
                 ?: virtualizerStrength.toInt()).coerceIn(0, 1000).toShort()
@@ -451,10 +462,11 @@ class AudioEffectManager(private val context: Context) {
     private fun applyVirtualizationToSession(session: SessionEffects, strength: Short) {
         try {
             session.virtualizer?.let { virt ->
+                if (!virt.hasControl()) return@let
                 if (knownSessionPackages[session.sessionId] == context.packageName ||
                     !isEnabled || strength <= 0
                 ) {
-                    virt.enabled = false
+                    if (virt.enabled) virt.setEnabled(false)
                     return@let
                 }
                 if (virt.strengthSupported) virt.setStrength(strength)
@@ -466,8 +478,7 @@ class AudioEffectManager(private val context: Context) {
                 else Virtualizer.VIRTUALIZATION_MODE_AUTO
                 // A failed request is normal on devices with fixed DSP routing.
                 runCatching { virt.forceVirtualizationMode(requestedMode) }
-                virt.enabled = true
-                Log.d(TAG, "3D session=${session.sessionId} mode=${virt.virtualizationMode} strength=${strength}")
+                if (!virt.enabled) virt.setEnabled(true)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Unable to enable 3D effect on session ${session.sessionId}", e)
@@ -488,36 +499,38 @@ class AudioEffectManager(private val context: Context) {
         if (updated.isNotEmpty()) _hardwareBands.value = updated
         // Per-app overrides are calculated independently; no global slider can
         // overwrite an explicit app preset.
-        activeEffectSessions.values.forEach(::applyCurrentParametersToSession)
+        activeEffectSessions.values.forEach { session ->
+            if (presetForSession(session.sessionId) == null) applyEqualizer(session, null)
+        }
     }
 
     private fun applyCurrentParametersToSession(session: SessionEffects) {
+        val preset = presetForSession(session.sessionId)
+        applyEqualizer(session, preset)
+        applyBassBoost(session, (preset?.bassBoost ?: bassBoostStrength.toInt()).coerceIn(0, 1000).toShort())
+        applyVirtualizationToSession(
+            session, (preset?.virtualizer ?: virtualizerStrength.toInt()).coerceIn(0, 1000).toShort()
+        )
+    }
+
+    private fun applyEqualizer(session: SessionEffects, preset: EqualizerPreset?) {
+        val eq = session.equalizer ?: return
         try {
-            val appPreset = presetForSession(session.sessionId)
-            val currentGains = appPreset?.gains ?: bandGains.map { it.toInt() }
-            val currentTreble = appPreset?.treble ?: trebleValue
-            val currentBass = (appPreset?.bassBoost ?: bassBoostStrength.toInt()).coerceIn(0, 1000).toShort()
-            val currentVirtualizer = (appPreset?.virtualizer ?: virtualizerStrength.toInt()).coerceIn(0, 1000).toShort()
-            session.equalizer?.let { eq ->
-                eq.enabled = isEnabled
-                val numBands = eq.numberOfBands.toInt()
-                val minGain = _capabilities.value.minGainMilliBel
-                val maxGain = _capabilities.value.maxGainMilliBel
-                for (i in 0 until numBands) {
-                    val effective = EqBandTuning.effectiveGain(
-                        currentGains.getOrNull(i) ?: 0,
-                        currentTreble, i, numBands, minGain.toInt(), maxGain.toInt()
-                    )
-                    eq.setBandLevel(i.toShort(), effective)
-                }
+            if (!eq.hasControl()) return
+            val numBands = eq.numberOfBands.toInt()
+            val range = eq.bandLevelRange
+            for (i in 0 until numBands) {
+                val gain = if (preset == null) bandGains.getOrNull(i)?.toInt() ?: 0
+                else preset.gains.getOrNull(i) ?: 0
+                val effective = EqBandTuning.effectiveGain(
+                    gain, preset?.treble ?: trebleValue, i, numBands,
+                    range[0].toInt(), range[1].toInt()
+                )
+                eq.setBandLevel(i.toShort(), effective)
             }
-            session.bassBoost?.let { bb ->
-                if (bb.strengthSupported) bb.setStrength(currentBass)
-                bb.enabled = isEnabled && currentBass > 0
-            }
-            applyVirtualizationToSession(session, currentVirtualizer)
-        } catch (e: Exception) {
-            Log.w(TAG, "Error applying current params to session ${session.sessionId}", e)
+            if (eq.enabled != isEnabled) eq.setEnabled(isEnabled)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Unable to apply EQ on session ${session.sessionId}", e)
         }
     }
 

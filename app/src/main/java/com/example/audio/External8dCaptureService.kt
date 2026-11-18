@@ -75,7 +75,7 @@ class External8dCaptureService : Service() {
 
     private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val running = AtomicBoolean(false)
-    private var worker: Thread? = null
+    private var workerOwnsAudio = false
     private var recorder: AudioRecord? = null
     private var playback: AudioTrack? = null
     private var projection: MediaProjection? = null
@@ -228,13 +228,15 @@ class External8dCaptureService : Service() {
         // No audio is stored, networked or recorded to disk.
         running.set(true)
         External8dCaptureState.set("running")
-        worker = thread(name = "AuraExternal8DAudio", priority = Thread.MAX_PRIORITY) {
-            val src = ByteBuffer.allocateDirect(1920 * 4).order(ByteOrder.nativeOrder())
-            val dst = ByteBuffer.allocateDirect(1920 * 4).order(ByteOrder.nativeOrder())
-            val silenceLimitFrames = SAMPLE_RATE.toLong() * NO_SIGNAL_AFTER_SECONDS
-            var silentFrames = 0L
-            var reportingNoSignal = false
+        thread(name = "AuraExternal8DAudio") {
             try {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+                val src = ByteBuffer.allocateDirect(1920 * 4).order(ByteOrder.nativeOrder())
+                val dst = ByteBuffer.allocateDirect(1920 * 4).order(ByteOrder.nativeOrder())
+                val silenceLimitFrames = SAMPLE_RATE.toLong() * NO_SIGNAL_AFTER_SECONDS
+                var silentFrames = 0L
+                var reportingNoSignal = false
+                if (!running.get()) return@thread
                 record.startRecording()
                 track.play()
                 while (running.get()) {
@@ -275,12 +277,17 @@ class External8dCaptureService : Service() {
                     }
                 }
             } catch (e: Exception) {
-                Log.w("AuraExternal8D", "Audio streaming terminated", e)
-                External8dCaptureState.set("error")
+                if (running.get()) {
+                    Log.w("AuraExternal8D", "Audio streaming terminated", e)
+                    External8dCaptureState.set("error")
+                }
             } finally {
+                runCatching { record.release() }
+                runCatching { track.release() }
                 stopSelf()
             }
         }
+        workerOwnsAudio = true
     }
 
     /** True if any sample in the buffer is non-zero. Uses absolute reads; position is unchanged. */
@@ -309,9 +316,15 @@ class External8dCaptureService : Service() {
     override fun onDestroy() {
         settingsScope.cancel()
         running.set(false)
-        releaseAudio()
-        worker?.let { if (it != Thread.currentThread()) runCatching { it.join(250) } }
-        worker = null
+        if (workerOwnsAudio) {
+            // Unblock the audio loop and let it release its own devices.
+            runCatching { recorder?.stop() }
+            runCatching { playback?.pause() }
+            recorder = null
+            playback = null
+        } else {
+            releaseAudio()
+        }
         projection?.let {
             runCatching { it.unregisterCallback(projectionCallback) }
             runCatching { it.stop() }

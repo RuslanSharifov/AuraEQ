@@ -140,7 +140,7 @@ class AuraPreferencesRepository(private val context: Context) {
                 emptyList()
             }
         }
-    }
+    }.distinctUntilChanged()
 
     val appProfilesFlow: Flow<Map<String, AppProfile>> = context.dataStore.data.map { prefs ->
         val raw = prefs[KEY_APP_PROFILES] ?: ""
@@ -159,7 +159,7 @@ class AuraPreferencesRepository(private val context: Context) {
                 emptyMap()
             }
         }
-    }
+    }.distinctUntilChanged()
 
     val deviceProfilesFlow: Flow<Map<AudioDeviceType, String>> = context.dataStore.data.map { prefs ->
         val raw = prefs[KEY_DEVICE_PROFILES] ?: ""
@@ -204,6 +204,16 @@ class AuraPreferencesRepository(private val context: Context) {
 
     suspend fun setEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_ENABLED] = enabled }
+    }
+
+    suspend fun applyPreset(preset: EqualizerPreset) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_CURRENT_PRESET_ID] = preset.id
+            prefs[KEY_CURRENT_GAINS] = preset.gains.joinToString(",")
+            prefs[KEY_BASS_BOOST] = preset.bassBoost.coerceIn(0, 1000)
+            prefs[KEY_TREBLE] = preset.treble.coerceIn(-1000, 1000)
+            prefs[KEY_VIRTUALIZER] = preset.virtualizer.coerceIn(0, 1000)
+        }
     }
 
     suspend fun setCurrentPresetId(id: String) {

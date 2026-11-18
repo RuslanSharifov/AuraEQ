@@ -20,6 +20,6 @@ data class SpatialSettings(
         rightTone = rightTone.coerceIn(-100, 100),
         staticPan = staticPan.coerceIn(-100, 100),
         depth = depth.coerceIn(0, 100),
-        periodSeconds = periodSeconds.coerceIn(2f, 30f)
+        periodSeconds = if (periodSeconds.isFinite()) periodSeconds.coerceIn(2f, 30f) else 8f
     )
 }

@@ -98,8 +98,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             preferences.isEnabledFlow.collect { enabled ->
                 _uiState.value = _uiState.value.copy(isEnabled = enabled)
-                audioEffectManager.setMasterEnabled(enabled)
-                External8dCaptureService.current?.updateSettings(_uiState.value.spatialSettings, enabled)
             }
         }
 
@@ -109,7 +107,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 // stored value; applying the stored one would snap the slider back.
                 if (spatialSaveJob?.isActive == true) return@collect
                 _uiState.value = _uiState.value.copy(spatialSettings = spatial)
-                External8dCaptureService.current?.updateSettings(spatial, _uiState.value.isEnabled)
             }
         }
 
@@ -127,21 +124,18 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             preferences.bassBoostFlow.collect { bb ->
                 _uiState.value = _uiState.value.copy(bassBoost = bb)
-                audioEffectManager.setBassBoost(bb)
             }
         }
 
         viewModelScope.launch {
             preferences.trebleFlow.collect { treble ->
                 _uiState.value = _uiState.value.copy(treble = treble)
-                audioEffectManager.setTreble(treble)
             }
         }
 
         viewModelScope.launch {
             preferences.virtualizerFlow.collect { virt ->
                 _uiState.value = _uiState.value.copy(virtualizer = virt)
-                audioEffectManager.setVirtualizer(virt)
             }
         }
 
@@ -299,24 +293,14 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         val newState = !_uiState.value.isEnabled
         _uiState.value = _uiState.value.copy(isEnabled = newState)
         audioEffectManager.setMasterEnabled(newState)
+        app.playbackRepository.setEffectsEnabled(newState)
         External8dCaptureService.current?.updateSettings(_uiState.value.spatialSettings, newState)
         viewModelScope.launch { preferences.setEnabled(newState) }
     }
 
     fun selectPreset(preset: EqualizerPreset) {
         cancelPendingSliderSaves()
-        viewModelScope.launch {
-            preferences.setCurrentPresetId(preset.id)
-            preferences.setCurrentGains(preset.gains)
-            preferences.setBassBoost(preset.bassBoost)
-            preferences.setTreble(preset.treble)
-            preferences.setVirtualizer(preset.virtualizer)
-
-            audioEffectManager.setBandsGains(preset.gains)
-            audioEffectManager.setBassBoost(preset.bassBoost)
-            audioEffectManager.setTreble(preset.treble)
-            audioEffectManager.setVirtualizer(preset.virtualizer)
-        }
+        viewModelScope.launch { preferences.applyPreset(preset) }
     }
 
     private fun applyPresetById(presetId: String) {
@@ -369,7 +353,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun updateVirtualizer(value: Int) {
         val newValue = value.coerceIn(0, 1000)
         audioEffectManager.setVirtualizer(newValue)
-        com.example.playback.AuraMediaSessionService.instance?.surround3dProcessor?.update(newValue, newValue > 0)
+        app.playbackRepository.updateSurroundStrength(newValue)
         _uiState.value = _uiState.value.copy(virtualizer = newValue)
         virtualizerSaveJob?.cancel()
         virtualizerSaveJob = viewModelScope.launch {
@@ -407,7 +391,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         audioEffectManager.setTreble(0)
         audioEffectManager.setVirtualizer(0)
         app.playbackRepository.updateSpatialSettings(SpatialSettings())
-        com.example.playback.AuraMediaSessionService.instance?.surround3dProcessor?.update(0, false)
+        app.playbackRepository.updateSurroundStrength(0)
         External8dCaptureService.current?.updateSettings(SpatialSettings(), _uiState.value.isEnabled)
         _uiState.value = _uiState.value.copy(
             activePresetId = "flat",
@@ -783,7 +767,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearArtworkCache() {
-        app.musicLibraryRepository.clearArtworkCache()
+        viewModelScope.launch { app.musicLibraryRepository.clearArtworkCache() }
     }
 
     // ==========================================

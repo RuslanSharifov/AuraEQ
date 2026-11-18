@@ -141,8 +141,8 @@ fun MiniPlayer(
                             .background(AuraAccent.copy(alpha = 0.15f))
                     ) {
                         Icon(
-                            imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
+                            imageVector = if (playbackState.showPauseButton) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (playbackState.showPauseButton) "Pause" else "Play",
                             tint = AuraAccent,
                             modifier = Modifier.size(20.dp)
                         )

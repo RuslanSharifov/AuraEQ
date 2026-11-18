@@ -413,8 +413,8 @@ fun NowPlayingScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
+                        imageVector = if (playbackState.showPauseButton) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playbackState.showPauseButton) "Pause" else "Play",
                         tint = Color.White,
                         modifier = Modifier.size(36.dp)
                     )

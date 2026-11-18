@@ -169,8 +169,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (isFinishing) {
-            (applicationContext as? AuraApplication)?.exitAndReset()
+        val app = application as AuraApplication
+        if (isFinishing && app.playbackRepository.playbackState.value.queue.isEmpty()) {
+            app.exitAndReset()
         }
         super.onDestroy()
     }
