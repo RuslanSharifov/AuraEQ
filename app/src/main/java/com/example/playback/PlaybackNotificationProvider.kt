@@ -30,7 +30,7 @@ import com.google.common.collect.ImmutableList
  * translucent rounded panel tinted with the dominant colour of the track's
  * embedded cover. Controls send broadcasts to [PlaybackNotificationReceiver].
  */
-@OptIn(UnstableApi::class)
+@UnstableApi
 class PlaybackNotificationProvider(
     private val service: AuraMediaSessionService
 ) : MediaNotification.Provider {
