@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.RemoteViews
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
@@ -29,6 +30,7 @@ import com.google.common.collect.ImmutableList
  * translucent rounded panel tinted with the dominant colour of the track's
  * embedded cover. Controls send broadcasts to [PlaybackNotificationReceiver].
  */
+@OptIn(UnstableApi::class)
 class PlaybackNotificationProvider(
     private val service: AuraMediaSessionService
 ) : MediaNotification.Provider {
