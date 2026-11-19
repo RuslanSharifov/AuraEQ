@@ -105,9 +105,6 @@ fun NowPlayingScreen(
     var showQueueDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
-    var userSeekingProgress by remember { mutableFloatStateOf(-1f) }
-
-    val activeProgress = if (userSeekingProgress >= 0f) userSeekingProgress else playbackState.progress
 
     // Background gradient
     val isDark = state.themeMode == "dark" || (state.themeMode == "system" && androidx.compose.foundation.isSystemInDarkTheme())
@@ -314,54 +311,12 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Audio-reactive visualizer bars (proportional to playback progress and EQ profile bands)
-            NowPlayingVisualizer(
+            PlaybackProgressSection(
+                viewModel = viewModel,
                 isPlaying = playbackState.isPlaying,
-                progress = activeProgress,
-                bands = state.bands,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(36.dp)
+                durationMs = playbackState.durationMs,
+                bands = state.bands
             )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Progress Slider
-            Slider(
-                value = activeProgress,
-                onValueChange = { userSeekingProgress = it },
-                onValueChangeFinished = {
-                    val targetMs = (userSeekingProgress * playbackState.durationMs).toLong()
-                    viewModel.seekTo(targetMs)
-                    userSeekingProgress = -1f
-                },
-                colors = SliderDefaults.colors(
-                    thumbColor = AuraAccent,
-                    activeTrackColor = AuraAccent,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("now_playing_slider")
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = playbackState.formattedCurrentTime,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = playbackState.formattedRemainingTime,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Playback Controls Row: Shuffle, Previous, Play/Pause, Next, Repeat
             Row(
@@ -413,8 +368,8 @@ fun NowPlayingScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (playbackState.showPauseButton) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playbackState.showPauseButton) "Pause" else "Play",
+                        imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
                         tint = Color.White,
                         modifier = Modifier.size(36.dp)
                     )
@@ -610,5 +565,73 @@ private fun NowPlayingVisualizer(
                 cornerRadius = CornerRadius(4f, 4f)
             )
         }
+    }
+}
+
+/**
+ * Visualizer, progress slider and time labels. These are the only parts that
+ * change every 500 ms, so they collect the position themselves. Parent screens
+ * do not recompose on each tick.
+ */
+@Composable
+private fun PlaybackProgressSection(
+    viewModel: AuraViewModel,
+    isPlaying: Boolean,
+    durationMs: Long,
+    bands: List<com.example.data.model.EqualizerBand>
+) {
+    val position by viewModel.playbackPosition.collectAsStateWithLifecycle()
+    var userSeekingProgress by remember { mutableFloatStateOf(-1f) }
+    val activeProgress = if (userSeekingProgress >= 0f) userSeekingProgress else position.progress
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+                // Audio-reactive visualizer bars (proportional to playback progress and EQ profile bands)
+                NowPlayingVisualizer(
+                    isPlaying = isPlaying,
+                    progress = activeProgress,
+                    bands = bands,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(36.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Progress Slider
+                Slider(
+                    value = activeProgress,
+                    onValueChange = { userSeekingProgress = it },
+                    onValueChangeFinished = {
+                        val targetMs = (userSeekingProgress * durationMs).toLong()
+                        viewModel.seekTo(targetMs)
+                        userSeekingProgress = -1f
+                    },
+                    colors = SliderDefaults.colors(
+                        thumbColor = AuraAccent,
+                        activeTrackColor = AuraAccent,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("now_playing_slider")
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = position.formattedCurrent,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = position.formattedRemaining,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
     }
 }

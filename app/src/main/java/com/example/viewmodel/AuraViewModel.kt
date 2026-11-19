@@ -98,6 +98,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             preferences.isEnabledFlow.collect { enabled ->
                 _uiState.value = _uiState.value.copy(isEnabled = enabled)
+                External8dCaptureService.current?.updateSettings(_uiState.value.spatialSettings, enabled)
             }
         }
 
@@ -107,6 +108,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 // stored value; applying the stored one would snap the slider back.
                 if (spatialSaveJob?.isActive == true) return@collect
                 _uiState.value = _uiState.value.copy(spatialSettings = spatial)
+                External8dCaptureService.current?.updateSettings(spatial, _uiState.value.isEnabled)
             }
         }
 
@@ -293,14 +295,24 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         val newState = !_uiState.value.isEnabled
         _uiState.value = _uiState.value.copy(isEnabled = newState)
         audioEffectManager.setMasterEnabled(newState)
-        app.playbackRepository.setEffectsEnabled(newState)
         External8dCaptureService.current?.updateSettings(_uiState.value.spatialSettings, newState)
         viewModelScope.launch { preferences.setEnabled(newState) }
     }
 
     fun selectPreset(preset: EqualizerPreset) {
         cancelPendingSliderSaves()
-        viewModelScope.launch { preferences.applyPreset(preset) }
+        viewModelScope.launch {
+            preferences.setCurrentPresetId(preset.id)
+            preferences.setCurrentGains(preset.gains)
+            preferences.setBassBoost(preset.bassBoost)
+            preferences.setTreble(preset.treble)
+            preferences.setVirtualizer(preset.virtualizer)
+
+            audioEffectManager.setBandsGains(preset.gains)
+            audioEffectManager.setBassBoost(preset.bassBoost)
+            audioEffectManager.setTreble(preset.treble)
+            audioEffectManager.setVirtualizer(preset.virtualizer)
+        }
     }
 
     private fun applyPresetById(presetId: String) {
@@ -353,7 +365,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun updateVirtualizer(value: Int) {
         val newValue = value.coerceIn(0, 1000)
         audioEffectManager.setVirtualizer(newValue)
-        app.playbackRepository.updateSurroundStrength(newValue)
+        com.example.playback.AuraMediaSessionService.instance?.surround3dProcessor?.update(newValue, newValue > 0)
         _uiState.value = _uiState.value.copy(virtualizer = newValue)
         virtualizerSaveJob?.cancel()
         virtualizerSaveJob = viewModelScope.launch {
@@ -391,7 +403,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         audioEffectManager.setTreble(0)
         audioEffectManager.setVirtualizer(0)
         app.playbackRepository.updateSpatialSettings(SpatialSettings())
-        app.playbackRepository.updateSurroundStrength(0)
+        com.example.playback.AuraMediaSessionService.instance?.surround3dProcessor?.update(0, false)
         External8dCaptureService.current?.updateSettings(SpatialSettings(), _uiState.value.isEnabled)
         _uiState.value = _uiState.value.copy(
             activePresetId = "flat",
@@ -650,6 +662,9 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     // ==========================================
 
     val playbackState: StateFlow<PlaybackState> = app.playbackRepository.playbackState
+
+    /** Live position, separate from playbackState so ticks do not recompose the whole app. */
+    val playbackPosition: StateFlow<com.example.playback.PlaybackPosition> = app.playbackRepository.playbackPosition
     val allTracks: Flow<List<Track>> = app.musicLibraryRepository.allTracksFlow
     val favoriteTracks: Flow<List<Track>> = app.musicLibraryRepository.favoriteTracksFlow
     val recentTracks: Flow<List<Track>> = app.musicLibraryRepository.recentTracksFlow
@@ -767,7 +782,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearArtworkCache() {
-        viewModelScope.launch { app.musicLibraryRepository.clearArtworkCache() }
+        app.musicLibraryRepository.clearArtworkCache()
     }
 
     // ==========================================

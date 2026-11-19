@@ -1,11 +1,12 @@
 package com.example.playback
 
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.net.Uri
-import android.os.SystemClock
-import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -16,19 +17,18 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
-import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.example.AuraApplication
 import com.example.MainActivity
-import com.example.R
 import com.example.audio.SpatialAudioProcessor
 import com.example.audio.SpatialSettings
 import com.example.audio.Stereo3DAudioProcessor
+import com.example.data.local.AuraMusicDatabase
 import com.example.data.model.Track
+import com.example.util.AuraLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,375 +38,456 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @OptIn(UnstableApi::class)
 class AuraMediaSessionService : MediaSessionService() {
-    private val app get() = application as AuraApplication
+
+    private val area = "Playback"
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val spatialProcessor = SpatialAudioProcessor()
-    private val surround3dProcessor = Stereo3DAudioProcessor()
-    private var spatialSettings = SpatialSettings()
-    private var surroundStrength = 0
-    private var effectsEnabled = false
-    private var queue: List<Track> = emptyList()
-    private var attachedSessionId = C.AUDIO_SESSION_ID_UNSET
-    private var progressJob: Job? = null
-    private var artworkJob: Job? = null
-    private var artworkTrackUri: String? = null
-    private var bufferingStartedAt: Long? = null
 
-    private lateinit var player: ExoPlayer
     private var mediaSession: MediaSession? = null
+    private var exoPlayer: ExoPlayer? = null
+    private var notifications: PlaybackNotificationProvider? = null
 
-    internal data class PlaybackRequest(
-        val tracks: List<Track>,
-        val index: Int,
-        val shuffle: Boolean
-    )
+    val spatialProcessor = SpatialAudioProcessor()
+    val surround3dProcessor = Stereo3DAudioProcessor()
+
+    private var progressJob: Job? = null
+    private var becomingNoisyReceiver: BroadcastReceiver? = null
+    private var lastAudioSessionId = 0
 
     companion object {
-        private const val TAG = "AuraPlayback"
-        private const val CHANNEL_ID = "aura_music_playback"
-
         var instance: AuraMediaSessionService? = null
             private set
 
-        internal var pendingPlayback: PlaybackRequest? = null
+        // A playback tap may start this service asynchronously. Keep the requested
+        // queue until onCreate has finished constructing the media session.
+        @Volatile internal var pendingPlayback: Pair<List<Track>, Int>? = null
 
         private val _playbackState = MutableStateFlow(PlaybackState())
         val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
+
+        private val _playbackPosition = MutableStateFlow(PlaybackPosition())
+        val playbackPosition: StateFlow<PlaybackPosition> = _playbackPosition.asStateFlow()
     }
 
     override fun onCreate() {
         super.onCreate()
-        setMediaNotificationProvider(
-            DefaultMediaNotificationProvider.Builder(this)
-                .setChannelId(CHANNEL_ID)
-                .setChannelName(R.string.playback_notification_channel)
-                .build()
-        )
-        player = createPlayer()
-        val sessionActivity = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        mediaSession = MediaSession.Builder(this, player)
-            .setSessionActivity(sessionActivity)
-            .build()
-            .also { addSession(it) }
         instance = this
-        observePreferences()
-        Log.i(TAG, "Playback service and media notification registered")
-
-        val request = pendingPlayback
-        pendingPlayback = null
-        if (request != null) playAll(request.tracks, request.index, request.shuffle)
+        AuraLog.i(area, "Service created")
+        notifications = PlaybackNotificationProvider(this).also { setMediaNotificationProvider(it) }
+        initPlayer()
+        registerBecomingNoisyReceiver()
+        pendingPlayback?.let { (tracks, index) ->
+            pendingPlayback = null
+            playAll(tracks, index)
+        }
     }
 
-    private fun createPlayer(): ExoPlayer {
+    private fun initPlayer() {
         val renderersFactory = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean
-            ): AudioSink = DefaultAudioSink.Builder(context)
-                .setAudioProcessors(arrayOf(spatialProcessor, surround3dProcessor))
-                .build()
+            ): AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(spatialProcessor, surround3dProcessor))
+                    .build()
+            }
         }
-        val attributes = AudioAttributes.Builder()
+
+        val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)
             .build()
 
-        return ExoPlayer.Builder(this, renderersFactory)
-            .setAudioAttributes(attributes, true)
+        val player = ExoPlayer.Builder(this, renderersFactory)
+            .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build().apply {
-                addListener(object : Player.Listener {
-                    override fun onEvents(player: Player, events: Player.Events) {
-                        // Native initialization can stall startup, so attach only after READY.
-                        // Session IDs may also change mid-playback when switching output routes.
-                        if (player.playbackState == Player.STATE_READY || attachedSessionId > 0) {
-                            syncAudioSession(this@apply.audioSessionId)
-                        }
-                        publishState()
-                    }
+            .build()
 
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        progressJob?.cancel()
-                        if (isPlaying) startProgressTracker()
-                    }
-
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        val now = SystemClock.elapsedRealtime()
-                        val bufferedFor = bufferingStartedAt?.let { now - it }
-                        bufferingStartedAt = now.takeIf { playbackState == Player.STATE_BUFFERING }
-                        val message = "State=$playbackState position=${currentPosition}ms buffer=${totalBufferedDuration}ms"
-                        if (bufferedFor != null && bufferedFor >= 1000) {
-                            Log.w(TAG, "$message after ${bufferedFor}ms buffering")
-                        } else {
-                            Log.d(TAG, message)
-                        }
-                    }
-
-                    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                        Log.d(TAG, "Play requested=$playWhenReady reason=$reason")
-                    }
-
-                    override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
-                        Log.d(TAG, "Playback suppression reason=$playbackSuppressionReason")
-                    }
-
-                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                        val track = currentTrack()
-                        Log.d(TAG, "Track transition index=$currentMediaItemIndex reason=$reason")
-                        if (track != null) recordPlayback(track)
-                        resolveArtwork(track)
-                    }
-
-                    override fun onPlayerError(error: PlaybackException) {
-                        val cause = error.cause?.javaClass?.simpleName ?: "unknown"
-                        Log.e(TAG, "Playback failed: ${error.errorCodeName}, cause=$cause, index=$currentMediaItemIndex")
-                    }
-                })
-                addAnalyticsListener(object : AnalyticsListener {
-                    override fun onAudioUnderrun(
-                        eventTime: AnalyticsListener.EventTime,
-                        bufferSize: Int,
-                        bufferSizeMs: Long,
-                        elapsedSinceLastFeedMs: Long
-                    ) {
-                        Log.w(TAG, "Audio underrun: buffer=$bufferSize bytes/${bufferSizeMs}ms, " +
-                            "time since last feed=${elapsedSinceLastFeedMs}ms")
-                    }
-                })
+        player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                _playbackState.value = _playbackState.value.copy(isPlaying = isPlaying)
+                AuraLog.d(area, "isPlaying=$isPlaying pos=${player.currentPosition}ms")
+                if (isPlaying) {
+                    startProgressTracker()
+                } else {
+                    progressJob?.cancel()
+                    progressJob = null
+                }
             }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                val dur = if (player.duration > 0) player.duration else 0L
+                _playbackState.value = _playbackState.value.copy(
+                    playbackState = state,
+                    durationMs = dur,
+                    isBuffering = state == Player.STATE_BUFFERING
+                )
+                _playbackPosition.value = _playbackPosition.value.copy(durationMs = dur)
+                AuraLog.d(area, "state=${stateName(state)} duration=${dur}ms")
+                // Fallback: normally onAudioSessionIdChanged already handled this.
+                syncAudioSession(player.audioSessionId)
+            }
+
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                _playbackState.value = _playbackState.value.copy(audioSessionId = audioSessionId)
+                syncAudioSession(audioSessionId)
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                AuraLog.e(area, "Playback failed code=${error.errorCodeName}", error)
+                _playbackState.value = _playbackState.value.copy(isPlaying = false, isBuffering = false)
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                AuraLog.i(area, "Track transition index=${player.currentMediaItemIndex} reason=$reason")
+                _playbackPosition.value = PlaybackPosition()
+                updateCurrentTrackFromPlayer()
+                notifications?.refresh()
+            }
+        })
+
+        exoPlayer = player
+
+        val sessionActivityIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            sessionActivityIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        mediaSession = MediaSession.Builder(this, player)
+            .setSessionActivity(pendingIntent)
+            .setCallback(AuraSessionCallback())
+            .build()
+
+        val app = applicationContext as? AuraApplication
+        if (app != null) {
+            serviceScope.launch {
+                app.preferencesRepository.spatialSettingsFlow.collect { settings ->
+                    spatialProcessor.update(settings, settings.is8dEnabled)
+                }
+            }
+            serviceScope.launch {
+                app.preferencesRepository.virtualizerFlow.collect { virt ->
+                    surround3dProcessor.update(virt, virt > 0)
+                }
+            }
+        }
     }
 
-    private fun observePreferences() {
-        val prefs = app.preferencesRepository
-        serviceScope.launch {
-            prefs.pauseOnDisconnectFlow.collect { player.setHandleAudioBecomingNoisy(it) }
-        }
-        serviceScope.launch {
-            prefs.isEnabledFlow.collect { setEffectsEnabled(it) }
-        }
-        serviceScope.launch {
-            prefs.spatialSettingsFlow.collect { updateSpatialSettings(it) }
-        }
-        serviceScope.launch {
-            prefs.virtualizerFlow.collect { updateSurroundStrength(it) }
+    /** Attaches effects only when the player's audio session actually changes. */
+    private fun syncAudioSession(sessionId: Int) {
+        if (sessionId <= 0 || sessionId == lastAudioSessionId) return
+        lastAudioSessionId = sessionId
+        AuraLog.i(area, "Audio session changed to $sessionId")
+        val app = applicationContext as? AuraApplication ?: return
+        try {
+            app.audioEffectManager.attachSession(sessionId, packageName)
+            app.onAudioSessionOpened(sessionId, packageName)
+        } catch (e: Exception) {
+            AuraLog.w(area, "Failed attaching effect session $sessionId", e)
         }
     }
 
-    private fun syncAudioSession(newId: Int) {
-        if (attachedSessionId == newId) return
-        if (attachedSessionId > 0) {
-            app.audioEffectManager.detachSession(attachedSessionId)
-            app.onAudioSessionClosed(attachedSessionId)
-        }
-        attachedSessionId = newId
-        if (newId > 0) {
-            app.audioEffectManager.attachSession(newId, packageName)
-            app.onAudioSessionOpened(newId, packageName)
-            Log.d(TAG, "Audio output session changed to $newId")
-        }
+    private fun stateName(state: Int) = when (state) {
+        Player.STATE_IDLE -> "IDLE"
+        Player.STATE_BUFFERING -> "BUFFERING"
+        Player.STATE_READY -> "READY"
+        Player.STATE_ENDED -> "ENDED"
+        else -> "UNKNOWN($state)"
     }
 
+    /** Position updates twice a second; the notification is refreshed once a second. */
     private fun startProgressTracker() {
+        progressJob?.cancel()
         progressJob = serviceScope.launch {
+            var tick = 0
             while (isActive) {
-                publishState()
+                val player = exoPlayer ?: break
+                val pos = player.currentPosition
+                val dur = if (player.duration > 0) player.duration else _playbackPosition.value.durationMs
+                _playbackPosition.value = PlaybackPosition(positionMs = pos, durationMs = dur)
+                tick++
+                if (tick % 2 == 0) notifications?.refresh()
                 delay(500)
             }
         }
     }
 
-    private fun currentTrack(): Track? {
-        val id = player.currentMediaItem?.mediaId
-        return queue.getOrNull(player.currentMediaItemIndex)?.takeIf { it.uriString == id }
-    }
-
-    private fun publishState() {
-        val track = currentTrack()
-        _playbackState.value = PlaybackState(
-            currentTrack = track,
-            isPlaying = player.isPlaying,
-            isBuffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady,
-            playbackState = player.playbackState,
-            currentPositionMs = player.currentPosition.coerceAtLeast(0),
-            durationMs = player.duration.takeIf { it > 0 } ?: track?.durationMs ?: 0L,
-            queue = queue,
-            currentQueueIndex = if (track == null) -1 else player.currentMediaItemIndex,
-            repeatMode = player.repeatMode,
-            isShuffleEnabled = player.shuffleModeEnabled,
-            audioSessionId = player.audioSessionId
-        )
-    }
-
-    private fun recordPlayback(track: Track) {
-        serviceScope.launch {
-            try {
-                app.preferencesRepository.saveLastPlayed(track.uriString, 0L)
-                app.musicLibraryRepository.recordTrackPlayed(track.uriString)
-            } catch (e: java.io.IOException) {
-                Log.w(TAG, "Could not save playback history", e)
-            } catch (e: android.database.SQLException) {
-                Log.w(TAG, "Could not update playback history", e)
+    private fun updateCurrentTrackFromPlayer() {
+        val player = exoPlayer ?: return
+        val currentIdx = player.currentMediaItemIndex
+        val queue = _playbackState.value.queue
+        if (currentIdx in queue.indices) {
+            val track = queue[currentIdx]
+            _playbackState.value = _playbackState.value.copy(
+                currentTrack = track,
+                currentQueueIndex = currentIdx
+            )
+            val app = applicationContext as? AuraApplication
+            if (app != null) {
+                serviceScope.launch {
+                    app.preferencesRepository.saveLastPlayed(track.uriString, 0L)
+                    AuraMusicDatabase.getInstance(applicationContext).trackDao().recordPlayback(track.uriString)
+                }
             }
         }
     }
 
-    private fun resolveArtwork(track: Track?) {
-        if (artworkTrackUri == track?.uriString) return
-        artworkJob?.cancel()
-        artworkTrackUri = track?.uriString
-        if (track == null) return
-
-        artworkJob = serviceScope.launch {
-            val artwork = try {
-                app.musicLibraryRepository.resolveArtwork(track)
-            } catch (e: android.database.SQLException) {
-                Log.w(TAG, "Could not update the library artwork", e)
-                return@launch
-            }
-            if (currentTrack()?.uriString != track.uriString) return@launch
-            queue = queue.map { if (it.uriString == track.uriString) it.copy(albumArtUri = artwork) else it }
-            val index = player.currentMediaItemIndex
-            val item = player.getMediaItemAt(index)
-            if (item.mediaMetadata.artworkUri?.toString() != artwork) {
-                val metadata = item.mediaMetadata.buildUpon()
-                    .setArtworkUri(artwork?.let(Uri::parse))
-                    .build()
-                // Only metadata changes, keeping the prepared source and current position.
-                player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(metadata).build())
-                Log.d(TAG, "Updated playback cover at index=$index, available=${artwork != null}")
-            }
-            publishState()
-        }
+    fun playTrack(track: Track, newQueue: List<Track>) {
+        val targetIdx = newQueue.indexOfFirst { it.uriString == track.uriString }.coerceAtLeast(0)
+        setQueueInternal(newQueue, targetIdx, playWhenReady = true)
     }
 
-    private fun Track.toMediaItem(): MediaItem = MediaItem.Builder()
-        .setUri(uri)
-        .setMediaId(uriString)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(title)
-                .setArtist(displayArtist)
-                .setAlbumTitle(displayAlbum)
-                .setArtworkUri(albumArtUri?.let(Uri::parse))
-                .build()
-        )
-        .build()
-
-    fun playAll(tracks: List<Track>, startIndex: Int, shuffle: Boolean) {
+    fun playAll(tracks: List<Track>, startIndex: Int = 0) {
         if (tracks.isEmpty()) return
-        val index = startIndex.coerceIn(tracks.indices)
-        queue = tracks.toList()
-        artworkJob?.cancel()
-        artworkTrackUri = null
-        player.shuffleModeEnabled = shuffle
-        player.setMediaItems(queue.map { it.toMediaItem() }, index, 0L)
-        resolveArtwork(currentTrack())
-        player.playWhenReady = true
+        val idx = startIndex.coerceIn(0, tracks.size - 1)
+        setQueueInternal(tracks, idx, playWhenReady = true)
+    }
+
+    fun shuffleAll(tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        val shuffled = tracks.shuffled()
+        setQueueInternal(shuffled, 0, playWhenReady = true)
+        _playbackState.value = _playbackState.value.copy(isShuffleEnabled = true)
+    }
+
+    /** Single place that builds a MediaItem, so every path carries the same artwork. */
+    private fun buildMediaItem(track: Track): MediaItem {
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.displayArtist)
+            .setAlbumTitle(track.displayAlbum)
+            .apply {
+                track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) }
+            }
+            .build()
+        return MediaItem.Builder()
+            .setUri(track.uri)
+            .setMediaId(track.uriString)
+            .setMediaMetadata(metadata)
+            .build()
+    }
+
+    private fun setQueueInternal(tracks: List<Track>, startIndex: Int, playWhenReady: Boolean) {
+        val player = exoPlayer ?: return
+        AuraLog.i(area, "Set queue size=${tracks.size} start=$startIndex")
+        player.setMediaItems(tracks.map { buildMediaItem(it) }, startIndex, 0L)
         player.prepare()
-        publishState()
+        if (playWhenReady) player.play()
+
+        _playbackState.value = _playbackState.value.copy(
+            queue = tracks,
+            currentQueueIndex = startIndex,
+            currentTrack = tracks.getOrNull(startIndex)
+        )
     }
 
     fun playNext(track: Track) {
-        val insertIndex = if (queue.isEmpty()) 0 else player.currentMediaItemIndex + 1
-        queue = queue.toMutableList().apply { add(insertIndex, track) }
-        player.addMediaItem(insertIndex, track.toMediaItem())
+        val currentQueue = _playbackState.value.queue.toMutableList()
+        val currentIdx = _playbackState.value.currentQueueIndex
+        val insertIdx = (currentIdx + 1).coerceIn(0, currentQueue.size)
+        currentQueue.add(insertIdx, track)
+        exoPlayer?.addMediaItem(insertIdx, buildMediaItem(track))
+        _playbackState.value = _playbackState.value.copy(queue = currentQueue)
     }
 
     fun addToQueue(track: Track) {
-        queue = queue + track
-        player.addMediaItem(track.toMediaItem())
+        val currentQueue = _playbackState.value.queue.toMutableList()
+        currentQueue.add(track)
+        exoPlayer?.addMediaItem(buildMediaItem(track))
+        _playbackState.value = _playbackState.value.copy(queue = currentQueue)
     }
 
     fun removeFromQueue(index: Int) {
-        if (index !in queue.indices) return
-        queue = queue.toMutableList().apply { removeAt(index) }
-        player.removeMediaItem(index)
+        val currentQueue = _playbackState.value.queue.toMutableList()
+        if (index !in currentQueue.indices) return
+        currentQueue.removeAt(index)
+        exoPlayer?.removeMediaItem(index)
+
+        val currentIdx = _playbackState.value.currentQueueIndex
+        val updatedIdx = if (index < currentIdx) currentIdx - 1 else currentIdx
+        _playbackState.value = _playbackState.value.copy(
+            queue = currentQueue,
+            currentQueueIndex = updatedIdx,
+            currentTrack = currentQueue.getOrNull(updatedIdx)
+        )
     }
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
-        if (fromIndex !in queue.indices || toIndex !in queue.indices || fromIndex == toIndex) return
-        queue = queue.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
-        player.moveMediaItem(fromIndex, toIndex)
+        val currentQueue = _playbackState.value.queue.toMutableList()
+        if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices) return
+        val item = currentQueue.removeAt(fromIndex)
+        currentQueue.add(toIndex, item)
+        exoPlayer?.moveMediaItem(fromIndex, toIndex)
+
+        val currentIdx = _playbackState.value.currentQueueIndex
+        val newIdx = when {
+            currentIdx == fromIndex -> toIndex
+            fromIndex < currentIdx && toIndex >= currentIdx -> currentIdx - 1
+            fromIndex > currentIdx && toIndex <= currentIdx -> currentIdx + 1
+            else -> currentIdx
+        }
+
+        _playbackState.value = _playbackState.value.copy(
+            queue = currentQueue,
+            currentQueueIndex = newIdx,
+            currentTrack = currentQueue.getOrNull(newIdx)
+        )
     }
 
     fun clearQueue() {
-        queue = emptyList()
-        player.pause()
-        player.clearMediaItems()
+        exoPlayer?.clearMediaItems()
+        _playbackPosition.value = PlaybackPosition()
+        _playbackState.value = _playbackState.value.copy(
+            queue = emptyList(),
+            currentQueueIndex = -1,
+            currentTrack = null,
+            isPlaying = false,
+            durationMs = 0L
+        )
     }
 
     fun togglePlayPause() {
-        if (queue.isEmpty()) return
-        val state = player.playbackState
-        if (player.playWhenReady && (state == Player.STATE_BUFFERING || state == Player.STATE_READY)) {
+        val player = exoPlayer ?: return
+        if (player.isPlaying) {
             player.pause()
         } else {
-            if (state == Player.STATE_IDLE) player.prepare()
-            if (state == Player.STATE_ENDED) player.seekToDefaultPosition()
             player.play()
         }
     }
 
-    fun seekTo(positionMs: Long) = player.seekTo(positionMs)
-    fun skipToNext() = player.seekToNext()
-    fun skipToPrevious() = player.seekToPrevious()
+    fun seekTo(positionMs: Long) {
+        exoPlayer?.seekTo(positionMs)
+        _playbackPosition.value = _playbackPosition.value.copy(positionMs = positionMs)
+    }
+
+    /** Toggles favorite for the playing track in the DB, queue and notification. */
+    fun toggleCurrentFavorite() {
+        val current = _playbackState.value.currentTrack ?: return
+        val next = !current.isFavorite
+        val updated = current.copy(isFavorite = next)
+        _playbackState.value = _playbackState.value.copy(
+            currentTrack = updated,
+            queue = _playbackState.value.queue.map { if (it.uriString == current.uriString) updated else it }
+        )
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                AuraMusicDatabase.getInstance(applicationContext)
+                    .trackDao()
+                    .setFavorite(current.uriString, next)
+                AuraLog.i(area, "Favorite=$next for ${current.title}")
+            } catch (e: Exception) {
+                AuraLog.e(area, "Favorite update failed", e)
+            }
+        }
+        notifications?.refresh()
+    }
+
+    fun skipToNext() {
+        val player = exoPlayer ?: return
+        val state = _playbackState.value
+        if (state.queue.isEmpty()) return
+        if (state.isShuffleEnabled && state.queue.size > 1) {
+            val randomIdx = state.queue.indices.filter { it != state.currentQueueIndex }.randomOrNull() ?: 0
+            player.seekToDefaultPosition(randomIdx)
+            player.play()
+        } else if (player.hasNextMediaItem()) {
+            player.seekToNextMediaItem()
+            player.play()
+        } else if (state.repeatMode == Player.REPEAT_MODE_ALL) {
+            player.seekToDefaultPosition(0)
+            player.play()
+        }
+    }
+
+    fun skipToPrevious() {
+        val player = exoPlayer ?: return
+        if (player.currentPosition > 3000) {
+            player.seekTo(0)
+        } else if (player.hasPreviousMediaItem()) {
+            player.seekToPreviousMediaItem()
+            player.play()
+        } else {
+            player.seekTo(0)
+        }
+    }
 
     fun toggleRepeatMode() {
-        player.repeatMode = when (player.repeatMode) {
+        val player = exoPlayer ?: return
+        val next = when (_playbackState.value.repeatMode) {
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
             Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
             else -> Player.REPEAT_MODE_OFF
         }
+        player.repeatMode = next
+        _playbackState.value = _playbackState.value.copy(repeatMode = next)
+        AuraLog.i(area, "Repeat mode=$next")
+        notifications?.refresh()
     }
 
     fun toggleShuffle() {
-        player.shuffleModeEnabled = !player.shuffleModeEnabled
-    }
-
-    fun setEffectsEnabled(enabled: Boolean) {
-        if (effectsEnabled == enabled) return
-        effectsEnabled = enabled
-        Log.d(TAG, "Local audio effects enabled=$enabled")
-        updateSpatialSettings(spatialSettings)
-        updateSurroundStrength(surroundStrength)
+        val player = exoPlayer ?: return
+        val next = !_playbackState.value.isShuffleEnabled
+        player.shuffleModeEnabled = next
+        _playbackState.value = _playbackState.value.copy(isShuffleEnabled = next)
     }
 
     fun updateSpatialSettings(settings: SpatialSettings) {
-        spatialSettings = settings
-        spatialProcessor.update(settings, effectsEnabled)
+        spatialProcessor.update(settings, settings.is8dEnabled)
     }
 
-    fun updateSurroundStrength(strength: Int) {
-        surroundStrength = strength
-        surround3dProcessor.update(strength, effectsEnabled)
+    private fun registerBecomingNoisyReceiver() {
+        becomingNoisyReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                    val app = applicationContext as? AuraApplication
+                    serviceScope.launch {
+                        val pause = app?.preferencesRepository?.pauseOnDisconnectFlow?.first() ?: true
+                        AuraLog.i(area, "Audio becoming noisy, pauseOnDisconnect=$pause")
+                        if (pause) exoPlayer?.pause()
+                    }
+                }
+            }
+        }
+        registerReceiver(becomingNoisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        return mediaSession
+    }
 
     override fun onDestroy() {
+        AuraLog.i(area, "Service destroyed")
         instance = null
+        progressJob?.cancel()
+        notifications?.cancel()
         serviceScope.cancel()
-        syncAudioSession(C.AUDIO_SESSION_ID_UNSET)
-        mediaSession?.let {
-            removeSession(it)
-            it.release()
+        becomingNoisyReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (_: Exception) {
+            }
         }
-        mediaSession = null
-        player.release()
-        _playbackState.value = PlaybackState()
-        Log.i(TAG, "Playback service stopped")
+        mediaSession?.run {
+            player.release()
+            release()
+            mediaSession = null
+        }
         super.onDestroy()
+    }
+
+    private inner class AuraSessionCallback : MediaSession.Callback {
+        // Default media session callback handles transport controls.
     }
 }

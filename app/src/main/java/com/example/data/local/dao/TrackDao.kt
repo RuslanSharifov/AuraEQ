@@ -40,9 +40,6 @@ interface TrackDao {
     @Update
     suspend fun updateTrack(track: TrackEntity)
 
-    @Query("UPDATE tracks SET albumArtUri = :artworkUri WHERE uriString = :uri")
-    suspend fun updateArtwork(uri: String, artworkUri: String?)
-
     @Query("UPDATE tracks SET isFavorite = :isFavorite WHERE uriString = :uri")
     suspend fun setFavorite(uri: String, isFavorite: Boolean)
 

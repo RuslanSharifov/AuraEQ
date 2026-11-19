@@ -169,9 +169,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        val app = application as AuraApplication
-        if (isFinishing && app.playbackRepository.playbackState.value.queue.isEmpty()) {
-            app.exitAndReset()
+        if (isFinishing) {
+            (applicationContext as? AuraApplication)?.exitAndReset()
         }
         super.onDestroy()
     }
@@ -352,6 +351,7 @@ fun AuraMainScreen(
         ) {
             MiniPlayer(
                 playbackState = playbackState,
+                positionFlow = viewModel.playbackPosition,
                 hazeState = hazeState,
                 onExpandNowPlaying = { showNowPlaying = true },
                 onTogglePlayPause = { viewModel.togglePlayPause() },

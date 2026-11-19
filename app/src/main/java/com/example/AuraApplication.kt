@@ -97,7 +97,10 @@ class AuraApplication : Application() {
         // process while Spotify is playing. Reset only on explicit user exit/reset.
         applicationScope.launch {
             // The Application owns the policies, not the Activity. They stay active
-            // while the UI is closed and are applied before connecting sessions.
+            // while the UI is closed. Only real changes trigger work: re-sending the
+            // same profile or enable flag re-attaches every live session.
+            var lastEnabled: Boolean? = null
+            var lastPolicies: Pair<Map<String, com.example.data.model.AppProfile>, List<EqualizerPreset>>? = null
             combine(
                 preferencesRepository.isEnabledFlow,
                 preferencesRepository.appProfilesFlow,
@@ -105,12 +108,19 @@ class AuraApplication : Application() {
             ) { enabled, appProfiles, customPresets ->
                 Triple(enabled, appProfiles, customPresets)
             }.collect { (enabled, appProfiles, customPresets) ->
-                audioEffectManager.configureAppPolicies(
-                    appProfiles,
-                    EqualizerPreset.getFactoryPresets() + customPresets
-                )
-                audioEffectManager.setMasterEnabled(enabled)
-                eqNotification.update(enabled)
+                val policies = appProfiles to customPresets
+                if (policies != lastPolicies) {
+                    lastPolicies = policies
+                    audioEffectManager.configureAppPolicies(
+                        appProfiles,
+                        EqualizerPreset.getFactoryPresets() + customPresets
+                    )
+                }
+                if (enabled != lastEnabled) {
+                    lastEnabled = enabled
+                    audioEffectManager.setMasterEnabled(enabled)
+                    eqNotification.update(enabled)
+                }
             }
         }
         applicationScope.launch {
@@ -137,7 +147,7 @@ class AuraApplication : Application() {
 
     /** User closes the last Activity: release all native effects and clear live tuning. */
     fun exitAndReset() {
-        audioEffectManager.setMasterEnabled(false)
+        audioEffectManager.release()
         eqNotification.clear()
         applicationScope.launch {
             preferencesRepository.resetAudioTuning(disable = true)

@@ -8,74 +8,93 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
-/** PCM16 spatial processing shared by the local player and playback capture. */
+/**
+ * Platform-neutral 16-bit interleaved stereo PCM processor, shared by Media3
+ * and the user-consented external audio playback capture monitor.
+ *
+ * Audio-thread rules:
+ *  - [process] takes no lock. A UI-thread [reset] only sets a flag that the next
+ *    [process] call consumes, so a slider change can never block playback.
+ *  - The LFO uses a precomputed sine table instead of Math.sin per sample.
+ *  - Mode strings are compared once per call, not once per sample.
+ */
 class SpatialPcmEngine(private val sampleRate: Int) {
-    private data class Configuration(val settings: SpatialSettings, val enabled: Boolean)
+    @Volatile private var settings = SpatialSettings()
+    @Volatile private var enabled = false
+    @Volatile private var resetPending = false
 
-    @Volatile private var configuration = Configuration(SpatialSettings(), false)
-    private val alpha = exp(-2.0 * PI * 1100.0 / sampleRate).toFloat()
     private var phase = 0.0
     private var lowL = 0f
     private var lowR = 0f
 
     fun update(value: SpatialSettings, masterEnabled: Boolean) {
-        val settings = value.sanitized()
-        configuration = Configuration(settings, masterEnabled && settings.is8dEnabled)
+        settings = value.sanitized()
+        enabled = masterEnabled && settings.is8dEnabled
+        if (!enabled) reset()
     }
 
-    /** Each call consumes complete mono or stereo frames and writes the same number of stereo frames. */
-    fun process(source: ByteBuffer, destination: ByteBuffer, channels: Int = 2): Int {
+    /** Safe to call from any thread. Takes effect at the next [process] call. */
+    fun reset() {
+        resetPending = true
+    }
+
+    fun process(source: ByteBuffer, destination: ByteBuffer): Int {
         require(source.order() == ByteOrder.nativeOrder() &&
             destination.order() == ByteOrder.nativeOrder())
-        require(channels in 1..2)
-        val frames = min(source.remaining() / (channels * 2), destination.remaining() / 4)
-        val config = configuration
-        if (!config.enabled) {
+        if (resetPending) {
+            resetPending = false
             phase = 0.0
             lowL = 0f
             lowR = 0f
-            if (channels == 2 && frames * 4 == source.remaining()) {
-                destination.put(source)
-            } else {
-                repeat(frames) {
-                    val left = source.short
-                    val right = if (channels == 2) source.short else left
-                    destination.putShort(left).putShort(right)
-                }
-            }
-            return frames * 4
         }
+        val frames = min(source.remaining(), destination.remaining()) / 4
+        val config = settings
+        val active = enabled
+        val leftVolume = config.leftPercent / 100f
+        val rightVolume = config.rightPercent / 100f
+        val leftTone = if (active) Math.pow(2.0, config.leftTone / 100.0).toFloat() else 1f
+        val rightTone = if (active) Math.pow(2.0, config.rightTone / 100.0).toFloat() else 1f
+        val alpha = exp(-2.0 * PI * 1100.0 / sampleRate).toFloat()
+        val oneMinusAlpha = 1f - alpha
 
-        val settings = config.settings
-        val leftVolume = settings.leftPercent / 100f
-        val rightVolume = settings.rightPercent / 100f
-        val leftTone = Math.pow(2.0, settings.leftTone / 100.0).toFloat()
-        val rightTone = Math.pow(2.0, settings.rightTone / 100.0).toFloat()
-        val dynamic = settings.mode == "dynamic"
-        val staticPan = if (settings.mode == "static") settings.staticPan * settings.depth / 10000f else 0f
-        val depth = settings.depth / 100f
-        val cycle = 2.0 * PI
-        val delta = cycle / (settings.periodSeconds * sampleRate)
+        val isStatic = config.mode == "static"
+        val isDynamic = config.mode == "dynamic"
+        val staticPan = config.staticPan * config.depth / 10000f
+        val depthScale = config.depth / 100f
+        val delta = 2.0 * PI / (config.periodSeconds * sampleRate)
 
-        repeat(frames) {
+        for (i in 0 until frames) {
             val left = source.short.toFloat()
-            val right = if (channels == 2) source.short.toFloat() else left
-            val pan = if (dynamic) {
-                val value = sin(phase).toFloat() * depth
-                phase += delta
-                if (phase >= cycle) phase -= cycle
-                value
-            } else staticPan
-            // Balance the existing channels to preserve stereo separation and out-of-phase audio.
-            val pannedLeft = left * (1f - max(0f, pan))
-            val pannedRight = right * (1f + min(0f, pan))
-            lowL = lowL * alpha + pannedLeft * (1f - alpha)
-            lowR = lowR * alpha + pannedRight * (1f - alpha)
-            val processedLeft = (pannedLeft + (pannedLeft - lowL) * (leftTone - 1f)) * leftVolume
-            val processedRight = (pannedRight + (pannedRight - lowR) * (rightTone - 1f)) * rightVolume
+            val right = source.short.toFloat()
+            var processedLeft = left
+            var processedRight = right
+            if (active) {
+                if (isStatic || isDynamic) {
+                    val lfo = if (isDynamic) lfoSample(phase) else 0f
+                    val pan = (if (isStatic) staticPan else lfo * depthScale).coerceIn(-1f, 1f)
+                    if (isDynamic) phase = (phase + delta) % (2 * PI)
+                    val center = (left + right) * 0.5f
+                    processedLeft = center * (1f - max(0f, pan))
+                    processedRight = center * (1f + min(0f, pan))
+                }
+                lowL = lowL * alpha + processedLeft * oneMinusAlpha
+                lowR = lowR * alpha + processedRight * oneMinusAlpha
+                processedLeft = (lowL + (processedLeft - lowL) * leftTone) * leftVolume
+                processedRight = (lowR + (processedRight - lowR) * rightTone) * rightVolume
+            }
             destination.putShort(processedLeft.toInt().coerceIn(-32768, 32767).toShort())
             destination.putShort(processedRight.toInt().coerceIn(-32768, 32767).toShort())
         }
         return frames * 4
+    }
+
+    private companion object {
+        const val TABLE_SIZE = 4096
+        const val TABLE_MASK = TABLE_SIZE - 1
+        val SIN_TABLE = FloatArray(TABLE_SIZE) { i -> sin(2.0 * PI * i / TABLE_SIZE).toFloat() }
+        val TABLE_SCALE = TABLE_SIZE / (2.0 * PI)
+
+        /** [phase] is always in [0, 2π), so the index is non-negative. */
+        fun lfoSample(phase: Double): Float = SIN_TABLE[(phase * TABLE_SCALE).toInt() and TABLE_MASK]
     }
 }

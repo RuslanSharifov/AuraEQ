@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.security.MessageDigest
 
 data class FolderInfo(
     val uriString: String,
@@ -29,8 +32,6 @@ class MusicLibraryRepository(
     private val preferencesRepository: AuraPreferencesRepository
 ) {
     private val TAG = "MusicLibraryRepo"
-    private val artworkCache = ArtworkCache(context)
-    private val artworkDispatcher = Dispatchers.IO.limitedParallelism(1)
 
     private val supportedExtensions = setOf(
         "mp3", "m4a", "aac", "flac", "ogg", "wav", "opus"
@@ -179,11 +180,10 @@ class MusicLibraryRepository(
             val dateAdded = file.lastModified()
             val sizeBytes = file.length()
 
-            val albumArtUri = try {
-                mmr.embeddedPicture?.let { artworkCache.store(fileUri.toString(), it) }
-            } catch (e: RuntimeException) {
-                Log.w("AuraArtwork", "Could not extract embedded artwork during import", e)
-                null
+            var albumArtUri: String? = null
+            val picBytes = mmr.embeddedPicture
+            if (picBytes != null && picBytes.isNotEmpty()) {
+                albumArtUri = saveArtworkCache(fileUri.toString(), picBytes)
             }
 
             TrackEntity(
@@ -220,27 +220,32 @@ class MusicLibraryRepository(
         }
     }
 
-    /** Repair old library entries and cache misses when a track is selected. */
-    suspend fun resolveArtwork(track: Track): String? = withContext(artworkDispatcher) {
-        val knownArtwork = track.albumArtUri
-        if (knownArtwork != null && artworkCache.contains(knownArtwork)) return@withContext knownArtwork
-
-        val retriever = MediaMetadataRetriever()
-        val artworkUri = try {
-            retriever.setDataSource(context, track.uri)
-            retriever.embeddedPicture?.let { artworkCache.store(track.uriString, it) }
-        } catch (e: RuntimeException) {
-            Log.w("AuraArtwork", "Could not extract embedded artwork during playback", e)
+    private fun saveArtworkCache(uriString: String, bytes: ByteArray): String? {
+        return try {
+            val md = MessageDigest.getInstance("MD5")
+            val hash = md.digest(uriString.toByteArray()).joinToString("") { "%02x".format(it) }
+            val cacheDir = File(context.cacheDir, "album_art")
+            if (!cacheDir.exists()) cacheDir.mkdirs()
+            val artFile = File(cacheDir, "$hash.jpg")
+            if (!artFile.exists()) {
+                FileOutputStream(artFile).use { it.write(bytes) }
+            }
+            Uri.fromFile(artFile).toString()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed caching artwork", e)
             null
-        } finally {
-            runCatching { retriever.release() }
         }
-        if (artworkUri != knownArtwork) trackDao.updateArtwork(track.uriString, artworkUri)
-        artworkUri
     }
 
-    suspend fun clearArtworkCache() = withContext(Dispatchers.IO) {
-        if (!artworkCache.clear()) Log.w("AuraArtwork", "Could not clear every cached cover")
+    fun clearArtworkCache() {
+        try {
+            val cacheDir = File(context.cacheDir, "album_art")
+            if (cacheDir.exists()) {
+                cacheDir.deleteRecursively()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error clearing artwork cache", e)
+        }
     }
 
     /**

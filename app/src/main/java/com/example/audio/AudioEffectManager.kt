@@ -4,56 +4,143 @@ import android.content.Context
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
-import android.media.audiofx.AudioEffect
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
 import android.media.audiofx.Virtualizer
-import android.util.Log
+import android.os.Build
+import com.example.data.model.AppProfile
 import com.example.data.model.AudioDeviceType
 import com.example.data.model.AudioEngineCapabilities
 import com.example.data.model.EqualizerBand
-import com.example.data.model.AppProfile
 import com.example.data.model.EqualizerPreset
+import com.example.util.AuraLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * Owns the Android audio effects (Equalizer, BassBoost, Virtualizer) attached to
+ * other apps' audio sessions.
+ *
+ * Performance rule: every setter is idempotent. A parameter is written to the
+ * native effect only when its value actually changed, and `enabled` is toggled
+ * only on change. Re-toggling a live effect on every playback callback is what
+ * caused audible gaps and stutters, so the caches in [SessionEffects] guard it.
+ */
 class AudioEffectManager(private val context: Context) {
 
-    private val TAG = "AuraAudioEffectManager"
+    private val area = "Effects"
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-    // Capabilities
     private val _capabilities = MutableStateFlow(AudioEngineCapabilities())
     val capabilities: StateFlow<AudioEngineCapabilities> = _capabilities.asStateFlow()
 
-    // Real hardware bands exposed to UI
-    private val _hardwareBands = MutableStateFlow<List<EqualizerBand>>(
-        listOf(
-            EqualizerBand(0, 60, -1500, 1500, 0),
-            EqualizerBand(1, 230, -1500, 1500, 0),
-            EqualizerBand(2, 910, -1500, 1500, 0),
-            EqualizerBand(3, 3600, -1500, 1500, 0),
-            EqualizerBand(4, 14000, -1500, 1500, 0)
-        )
-    )
+    private val _hardwareBands = MutableStateFlow<List<EqualizerBand>>(defaultBands())
     val hardwareBands: StateFlow<List<EqualizerBand>> = _hardwareBands.asStateFlow()
 
-    // Current output device route
     private val _currentDeviceType = MutableStateFlow(AudioDeviceType.SPEAKER)
     val currentDeviceType: StateFlow<AudioDeviceType> = _currentDeviceType.asStateFlow()
 
     private val _currentDeviceName = MutableStateFlow("Phone Speaker")
     val currentDeviceName: StateFlow<String> = _currentDeviceName.asStateFlow()
 
-    // Active session count
     private val _activeSessions = MutableStateFlow<Set<Int>>(emptySet())
     val activeSessions: StateFlow<Set<Int>> = _activeSessions.asStateFlow()
 
-    // Only report a package as attached if this process currently owns a live EQ
-    // for a session that the player actually published. No invented global EQ.
     private val _controlledPackages = MutableStateFlow<Set<String>>(emptySet())
     val controlledPackages: StateFlow<Set<String>> = _controlledPackages.asStateFlow()
+
+    /** Per-session native effects plus the last values written to them. */
+    private class SessionEffects(val sessionId: Int) {
+        var equalizer: Equalizer? = null
+        var bassBoost: BassBoost? = null
+        var virtualizer: Virtualizer? = null
+
+        var appliedBands: IntArray? = null
+        var appliedEqEnabled: Boolean? = null
+        var appliedBass: Int? = null
+        var appliedBassEnabled: Boolean? = null
+        var appliedVirtStrength: Int? = null
+        var appliedVirtMode: Int? = null
+        var appliedVirtEnabled: Boolean? = null
+
+        fun hasAnyEffect() = equalizer != null || bassBoost != null || virtualizer != null
+
+        /** Forget cached values so the next apply writes everything again. */
+        fun invalidate() {
+            appliedBands = null
+            appliedEqEnabled = null
+            appliedBass = null
+            appliedBassEnabled = null
+            appliedVirtStrength = null
+            appliedVirtMode = null
+            appliedVirtEnabled = null
+        }
+
+        fun release() {
+            try {
+                equalizer?.enabled = false
+                equalizer?.release()
+            } catch (e: Exception) {
+                AuraLog.w("Effects", "Error releasing equalizer on session $sessionId", e)
+            }
+            try {
+                bassBoost?.enabled = false
+                bassBoost?.release()
+            } catch (e: Exception) {
+                AuraLog.w("Effects", "Error releasing bassBoost on session $sessionId", e)
+            }
+            try {
+                virtualizer?.enabled = false
+                virtualizer?.release()
+            } catch (e: Exception) {
+                AuraLog.w("Effects", "Error releasing virtualizer on session $sessionId", e)
+            }
+            equalizer = null
+            bassBoost = null
+            virtualizer = null
+            invalidate()
+        }
+    }
+
+    private val activeEffectSessions = mutableMapOf<Int, SessionEffects>()
+    private val knownSessionPackages = mutableMapOf<Int, String?>()
+
+    private var appPolicies: Map<String, AppProfile> = emptyMap()
+    private var availablePresets: Map<String, EqualizerPreset> = emptyMap()
+
+    private var isEnabled = false
+    private var bandGains = mutableListOf<Short>()
+    private var bassBoostStrength: Short = 0
+    private var trebleValue: Int = 0
+    private var virtualizerStrength: Short = 0
+
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+            AuraLog.i(area, "Audio device added, re-applying effects")
+            detectAudioRoute()
+            refreshActiveSessions()
+        }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+            AuraLog.i(area, "Audio device removed, re-applying effects")
+            detectAudioRoute()
+            refreshActiveSessions()
+        }
+    }
+
+    init {
+        try {
+            detectAudioRoute()
+        } catch (e: RuntimeException) {
+            AuraLog.w(area, "Audio device route detection unavailable", e)
+        }
+        try {
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+        } catch (e: RuntimeException) {
+            AuraLog.w(area, "Audio device change callback unavailable", e)
+        }
+    }
 
     @Synchronized
     private fun publishControlStatus() {
@@ -67,7 +154,7 @@ class AudioEffectManager(private val context: Context) {
         }
     }
 
-    /** Reapply parameters after an external player changes its audio processing route. */
+    /** Reapply parameters after an external player changes its audio route. */
     @Synchronized
     fun refreshActiveSessions() {
         if (!isEnabled) {
@@ -77,9 +164,13 @@ class AudioEffectManager(private val context: Context) {
         knownSessionPackages.toMap().forEach { (sessionId, packageName) ->
             if (!AppAudioPolicy.shouldProcess(packageName, appPolicies)) {
                 activeEffectSessions.remove(sessionId)?.release()
+                return@forEach
+            }
+            val existing = activeEffectSessions[sessionId]
+            if (existing != null && existing.hasAnyEffect()) {
+                existing.invalidate()
+                applyCurrentParametersToSession(existing)
             } else {
-                // Retry missing processors immediately and reapply all live parameters.
-                // Pausing/resuming playback must not be required for sessions we own.
                 attachSession(sessionId, packageName)
             }
         }
@@ -87,48 +178,24 @@ class AudioEffectManager(private val context: Context) {
         publishControlStatus()
     }
 
-    // Internal session effects holder
-    private class SessionEffects(
-        val sessionId: Int,
-        var equalizer: Equalizer? = null,
-        var bassBoost: BassBoost? = null,
-        var virtualizer: Virtualizer? = null
-    ) {
-        fun release() {
-            for (effect in listOfNotNull(equalizer, bassBoost, virtualizer)) {
-                try {
-                    effect.release()
-                } catch (e: RuntimeException) {
-                    Log.w("SessionEffects", "Error releasing effect on session $sessionId", e)
-                }
-            }
-        }
-    }
-
-    private val activeEffectSessions = mutableMapOf<Int, SessionEffects>()
-    // Remember observed sessions while EQ is disabled so enabling can reattach to a
-    // *valid* session (never deprecated global session 0).
-    private val knownSessionPackages = mutableMapOf<Int, String?>()
-
-    private var appPolicies: Map<String, AppProfile> = emptyMap()
-    private var availablePresets: Map<String, EqualizerPreset> = emptyMap()
-
-    /** Apply policy to existing sessions immediately, not only to future song starts. */
     @Synchronized
     fun configureAppPolicies(
         profiles: Map<String, AppProfile>,
         presets: List<EqualizerPreset>
     ) {
-        val presetsById = presets.associateBy { it.id }
-        if (appPolicies == profiles && availablePresets == presetsById) return
         appPolicies = profiles.toMap()
-        availablePresets = presetsById
+        availablePresets = presets.associateBy { it.id }
         knownSessionPackages.toMap().forEach { (sessionId, packageName) ->
             if (!AppAudioPolicy.shouldProcess(packageName, appPolicies)) {
-                // Release native objects to guarantee no coloring on excluded apps.
                 activeEffectSessions.remove(sessionId)?.release()
             } else if (isEnabled) {
-                attachSession(sessionId, packageName)
+                val existing = activeEffectSessions[sessionId]
+                if (existing != null && existing.hasAnyEffect()) {
+                    existing.invalidate()
+                    applyCurrentParametersToSession(existing)
+                } else {
+                    attachSession(sessionId, packageName)
+                }
             }
         }
         _activeSessions.value = activeEffectSessions.keys.toSet()
@@ -137,42 +204,6 @@ class AudioEffectManager(private val context: Context) {
 
     private fun presetForSession(sessionId: Int): EqualizerPreset? =
         AppAudioPolicy.presetFor(knownSessionPackages[sessionId], appPolicies, availablePresets)
-
-    // Current applied audio parameters
-    private var isEnabled = false // Remain neutral until user explicitly enables EQ
-    private var bandGains = mutableListOf<Short>()
-    private var bassBoostStrength: Short = 0
-    private var trebleValue: Int = 0 // -1000..1000
-    private var virtualizerStrength: Short = 0
-
-    // AudioDeviceCallback for route changes
-    private val audioDeviceCallback = object : AudioDeviceCallback() {
-        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
-            detectAudioRoute()
-            refreshActiveSessions()
-        }
-
-        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
-            detectAudioRoute()
-            refreshActiveSessions()
-        }
-    }
-
-    init {
-        // Route discovery and callbacks vary across OEM audio implementations.
-        // A failure here must not crash the entire application during startup.
-        try {
-            detectAudioRoute()
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "Audio device route detection unavailable", e)
-        }
-        try {
-            audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "Audio device change callback unavailable", e)
-        }
-        // Do not probe deprecated global session 0; await a valid playback session.
-    }
 
     fun probeHardwareCapabilities(sampleSessionId: Int, existingEqualizer: Equalizer? = null) {
         if (sampleSessionId <= 0) return
@@ -186,43 +217,35 @@ class AudioEffectManager(private val context: Context) {
             val minGain: Short = range?.getOrNull(0) ?: (-1500).toShort()
             val maxGain: Short = range?.getOrNull(1) ?: 1500.toShort()
 
-            val bands = mutableListOf<EqualizerBand>()
-            for (i in 0 until numBands) {
-                val centerFreq = testEq.getCenterFreq(i.toShort()) / 1000 // mHz to Hz
-                bands.add(
-                    EqualizerBand(
-                        index = i.toShort(),
-                        centerFreqHz = centerFreq,
-                        minMilliBel = minGain,
-                        maxMilliBel = maxGain,
-                        currentGainMilliBel = 0.toShort()
-                    )
+            val bands = (0 until numBands).map { i ->
+                EqualizerBand(
+                    index = i.toShort(),
+                    centerFreqHz = testEq.getCenterFreq(i.toShort()) / 1000,
+                    minMilliBel = minGain,
+                    maxMilliBel = maxGain,
+                    currentGainMilliBel = 0.toShort()
                 )
             }
-            // Preserve USER band levels. Probing a session must not zero existing
-            // sliders (and treble is not a saved/user band level).
             _hardwareBands.value = bands.mapIndexed { i, band ->
                 band.copy(currentGainMilliBel = bandGains.getOrNull(i) ?: 0)
             }
 
-            // Check BassBoost
             var bbSupported = false
             try {
                 val bb = BassBoost(0, sampleSessionId)
                 bbSupported = bb.strengthSupported
                 bb.release()
             } catch (e: Exception) {
-                Log.d(TAG, "BassBoost not supported: ${e.message}")
+                AuraLog.d(area, "BassBoost not supported: ${e.message}")
             }
 
-            // Check Virtualizer
             var virtSupported = false
             try {
                 val virt = Virtualizer(0, sampleSessionId)
                 virtSupported = virt.strengthSupported
                 virt.release()
             } catch (e: Exception) {
-                Log.d(TAG, "Virtualizer not supported: ${e.message}")
+                AuraLog.d(area, "Virtualizer not supported: ${e.message}")
             }
 
             _capabilities.value = AudioEngineCapabilities(
@@ -233,18 +256,10 @@ class AudioEffectManager(private val context: Context) {
                 isBassBoostSupported = bbSupported,
                 isVirtualizerSupported = virtSupported
             )
-
+            AuraLog.i(area, "Probe session=$sampleSessionId bands=$numBands bass=$bbSupported virt=$virtSupported")
         } catch (e: Exception) {
-            Log.w(TAG, "Session probe on session $sampleSessionId fallback to standard 5-band", e)
-            // Fallback default 5 bands: 60Hz, 230Hz, 910Hz, 3600Hz, 14000Hz
-            val fallbackBands = listOf(
-                EqualizerBand(0, 60, -1500, 1500, 0),
-                EqualizerBand(1, 230, -1500, 1500, 0),
-                EqualizerBand(2, 910, -1500, 1500, 0),
-                EqualizerBand(3, 3600, -1500, 1500, 0),
-                EqualizerBand(4, 14000, -1500, 1500, 0)
-            )
-            _hardwareBands.value = fallbackBands.mapIndexed { i, band ->
+            AuraLog.w(area, "Session probe on $sampleSessionId fell back to standard 5-band", e)
+            _hardwareBands.value = defaultBands().mapIndexed { i, band ->
                 band.copy(currentGainMilliBel = bandGains.getOrNull(i) ?: 0)
             }
             _capabilities.value = AudioEngineCapabilities(
@@ -261,35 +276,45 @@ class AudioEffectManager(private val context: Context) {
     }
 
     /**
-     * Attaches audio effects to a valid audio session ID.
+     * Attaches effects to a valid audio session. If the session already has an
+     * Equalizer, this only updates the owner and returns: tuning is pushed by the
+     * setters, so re-creating or re-toggling live effects here would cause gaps.
      */
     @Synchronized
     fun attachSession(sessionId: Int, packageName: String? = null) {
         if (sessionId <= 0) return
-        // A null owner from a late intent must not erase a known app identity.
         val owner = packageName ?: knownSessionPackages[sessionId]
         knownSessionPackages[sessionId] = owner
         if (!isEnabled || !AppAudioPolicy.shouldProcess(owner, appPolicies)) {
-            activeEffectSessions.remove(sessionId)?.release()
+            if (activeEffectSessions.remove(sessionId)?.also { it.release() } != null) {
+                AuraLog.i(area, "Session $sessionId released (disabled or excluded, pkg=$owner)")
+            }
             _activeSessions.value = activeEffectSessions.keys.toSet()
             publishControlStatus()
             return
         }
-        Log.i(TAG, "Attaching audio effects to session: $sessionId (pkg=$owner)")
 
-        val sessionEffects = activeEffectSessions.getOrPut(sessionId) {
-            SessionEffects(sessionId)
+        val existing = activeEffectSessions[sessionId]
+        if (existing?.equalizer != null) {
+            publishControlStatus()
+            return
         }
 
+        AuraLog.i(area, "Attaching effects to session=$sessionId pkg=$owner")
+        val session = existing ?: SessionEffects(sessionId).also { activeEffectSessions[sessionId] = it }
+
         try {
-            if (sessionEffects.equalizer == null) {
+            if (session.equalizer == null) {
                 val eq = Equalizer(1000, sessionId)
-                sessionEffects.equalizer = eq
+                session.equalizer = eq
                 eq.setControlStatusListener { effect, hasControl ->
                     synchronized(this@AudioEffectManager) {
-                        if (activeEffectSessions[sessionId]?.equalizer === effect) {
+                        val current = activeEffectSessions[sessionId] ?: return@synchronized
+                        if (current.equalizer === effect) {
+                            AuraLog.i(area, "Control status session=$sessionId hasControl=$hasControl")
                             if (hasControl && isEnabled) {
-                                applyCurrentParametersToSession(activeEffectSessions[sessionId]!!)
+                                current.invalidate()
+                                applyCurrentParametersToSession(current)
                             }
                             publishControlStatus()
                         }
@@ -297,13 +322,9 @@ class AudioEffectManager(private val context: Context) {
                 }
                 eq.setEnableStatusListener { effect, _ ->
                     synchronized(this@AudioEffectManager) {
-                        if (activeEffectSessions[sessionId]?.equalizer === effect) {
-                            publishControlStatus()
-                        }
+                        if (activeEffectSessions[sessionId]?.equalizer === effect) publishControlStatus()
                     }
                 }
-                // Read hardware bands from the effect we actually own.
-                // Creating a second Equalizer just for probing can steal control.
                 if (!_capabilities.value.isHardwareEqualizerSupported ||
                     _hardwareBands.value.size != eq.numberOfBands.toInt()
                 ) {
@@ -311,226 +332,211 @@ class AudioEffectManager(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to create Equalizer for session $sessionId: ${e.message}")
+            AuraLog.w(area, "Failed to create Equalizer for session $sessionId", e)
         }
 
         try {
-            if (sessionEffects.bassBoost == null) {
-                val bass = BassBoost(1000, sessionId)
-                sessionEffects.bassBoost = bass
-                bass.setControlStatusListener { effect, hasControl ->
-                    synchronized(this@AudioEffectManager) {
-                        if (hasControl && activeEffectSessions[sessionId]?.bassBoost === effect) {
-                            val strength = presetForSession(sessionId)?.bassBoost ?: bassBoostStrength.toInt()
-                            applyBassBoost(sessionEffects, strength.coerceIn(0, 1000).toShort())
-                        }
-                    }
-                }
+            if (session.bassBoost == null) {
+                session.bassBoost = BassBoost(1000, sessionId)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to create BassBoost for session $sessionId: ${e.message}")
+            AuraLog.w(area, "Failed to create BassBoost for session $sessionId", e)
         }
 
         try {
-            if (sessionEffects.virtualizer == null && owner != context.packageName) {
-                val virtualizer = Virtualizer(1000, sessionId)
-                sessionEffects.virtualizer = virtualizer
-                virtualizer.setControlStatusListener { effect, hasControl ->
-                    synchronized(this@AudioEffectManager) {
-                        if (hasControl && activeEffectSessions[sessionId]?.virtualizer === effect) {
-                            val strength = presetForSession(sessionId)?.virtualizer ?: virtualizerStrength.toInt()
-                            applyVirtualizationToSession(sessionEffects, strength.coerceIn(0, 1000).toShort())
-                        }
-                    }
-                }
+            if (session.virtualizer == null) {
+                session.virtualizer = Virtualizer(1000, sessionId)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to create Virtualizer for session $sessionId: ${e.message}")
+            AuraLog.w(area, "Failed to create Virtualizer for session $sessionId", e)
         }
 
-        if (sessionEffects.equalizer == null &&
-            sessionEffects.bassBoost == null &&
-            sessionEffects.virtualizer == null
-        ) {
-            // No audio effect attached. Do not report the session as processing.
-            activeEffectSessions.remove(sessionId)
+        if (session.hasAnyEffect()) {
+            applyCurrentParametersToSession(session)
         } else {
-            applyCurrentParametersToSession(sessionEffects)
+            AuraLog.w(area, "No effect could be created for session $sessionId")
+            activeEffectSessions.remove(sessionId)
         }
         _activeSessions.value = activeEffectSessions.keys.toSet()
         publishControlStatus()
     }
 
-    /**
-     * Detaches and releases audio effects for a closed session.
-     */
     @Synchronized
     fun detachSession(sessionId: Int) {
         knownSessionPackages.remove(sessionId)
-        Log.i(TAG, "Detaching audio effects from session: $sessionId")
-        val session = activeEffectSessions.remove(sessionId)
-        session?.release()
+        AuraLog.i(area, "Detaching effects from session=$sessionId")
+        activeEffectSessions.remove(sessionId)?.release()
         _activeSessions.value = activeEffectSessions.keys.toSet()
         publishControlStatus()
     }
 
     @Synchronized
     fun setMasterEnabled(enabled: Boolean) {
-        if (isEnabled == enabled) return
-        Log.d(TAG, "Master effects enabled=$enabled")
+        if (enabled == isEnabled) {
+            publishControlStatus()
+            return
+        }
+        AuraLog.i(area, "Master EQ ${if (enabled) "ON" else "OFF"}")
         if (!enabled) {
-            this.isEnabled = false
-            // Android effects belong to our sessions. Disabling only the master flag
-            // can leave native tone coloration on some OEM audio stacks: release them.
+            isEnabled = false
             activeEffectSessions.values.forEach { it.release() }
             activeEffectSessions.clear()
             _activeSessions.value = emptySet()
             publishControlStatus()
             return
         }
-        this.isEnabled = true
+        isEnabled = true
         refreshActiveSessions()
     }
 
     @Synchronized
     fun setBandsGains(gains: List<Int>) {
-        val next = gains.map { it.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort() }
-        if (bandGains == next) return
-        bandGains = next.toMutableList()
+        bandGains = gains.map { it.toShort() }.toMutableList()
         applyGainsWithTreble()
     }
 
     @Synchronized
     fun setBandGain(bandIndex: Short, gainMilliBel: Short) {
-        while (bandGains.size <= bandIndex) {
-            bandGains.add(0)
-        }
+        while (bandGains.size <= bandIndex) bandGains.add(0)
         bandGains[bandIndex.toInt()] = gainMilliBel
         applyGainsWithTreble()
     }
 
     @Synchronized
     fun setBassBoost(strength: Int) {
-        val next = strength.coerceIn(0, 1000).toShort()
-        if (bassBoostStrength == next) return
-        bassBoostStrength = next
+        bassBoostStrength = strength.coerceIn(0, 1000).toShort()
         activeEffectSessions.values.forEach { session ->
-            if (presetForSession(session.sessionId) == null) applyBassBoost(session, next)
-        }
-    }
-
-    private fun applyBassBoost(session: SessionEffects, strength: Short) {
-        val bass = session.bassBoost ?: return
-        try {
-            if (!bass.hasControl()) return
-            if (bass.strengthSupported) bass.setStrength(strength)
-            val enabled = isEnabled && strength > 0
-            if (bass.enabled != enabled) bass.setEnabled(enabled)
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "Unable to apply bass on session ${session.sessionId}", e)
+            if (presetForSession(session.sessionId) == null) {
+                applyBassToSession(session, bassBoostStrength.toInt())
+            }
         }
     }
 
     @Synchronized
     fun setTreble(value: Int) {
-        val next = value.coerceIn(-1000, 1000)
-        if (trebleValue == next) return
-        trebleValue = next
+        trebleValue = value.coerceIn(-1000, 1000)
         applyGainsWithTreble()
     }
 
     @Synchronized
     fun setVirtualizer(strength: Int) {
-        val next = strength.coerceIn(0, 1000).toShort()
-        if (virtualizerStrength == next) return
-        virtualizerStrength = next
+        virtualizerStrength = strength.coerceIn(0, 1000).toShort()
         activeEffectSessions.values.forEach { session ->
-            val currentStrength = (presetForSession(session.sessionId)?.virtualizer
-                ?: virtualizerStrength.toInt()).coerceIn(0, 1000).toShort()
-            applyVirtualizationToSession(session, currentStrength)
+            val current = (presetForSession(session.sessionId)?.virtualizer
+                ?: virtualizerStrength.toInt()).coerceIn(0, 1000)
+            applyVirtualizationToSession(session, current)
         }
     }
 
     /**
-     * Use the OEM binaural mode for headphones when supported. Some devices
-     * expose Virtualizer but no strength control or no compatible virtualizer:
-     * that cannot be fixed by increasing the slider and is not reported as 3D.
-     *
-     * Our Media3 player already has a deterministic PCM widening processor,
-     * so avoid stacking the OEM effect on that same self-owned session.
+     * Uses the OEM binaural mode on headphones. Our own Media3 session is skipped:
+     * it already has the deterministic PCM widening, so stacking the OEM effect
+     * on it would double the processing.
      */
-    private fun applyVirtualizationToSession(session: SessionEffects, strength: Short) {
+    private fun applyVirtualizationToSession(session: SessionEffects, strength: Int) {
+        val virt = session.virtualizer ?: return
+        val ownSession = knownSessionPackages[session.sessionId] == context.packageName
+        val want = isEnabled && !ownSession && strength > 0
         try {
-            session.virtualizer?.let { virt ->
-                if (!virt.hasControl()) return@let
-                if (knownSessionPackages[session.sessionId] == context.packageName ||
-                    !isEnabled || strength <= 0
-                ) {
-                    if (virt.enabled) virt.setEnabled(false)
-                    return@let
+            if (!want) {
+                if (session.appliedVirtEnabled != false) {
+                    virt.enabled = false
+                    session.appliedVirtEnabled = false
                 }
-                if (virt.strengthSupported) virt.setStrength(strength)
-                val isHeadphone = _currentDeviceType.value in setOf(
-                    AudioDeviceType.WIRED, AudioDeviceType.BLUETOOTH, AudioDeviceType.USB
-                )
-                val requestedMode = if (isHeadphone)
-                    Virtualizer.VIRTUALIZATION_MODE_BINAURAL
-                else Virtualizer.VIRTUALIZATION_MODE_AUTO
-                // A failed request is normal on devices with fixed DSP routing.
+                return
+            }
+            if (session.appliedVirtStrength != strength) {
+                if (virt.strengthSupported) virt.setStrength(strength.toShort())
+                session.appliedVirtStrength = strength
+            }
+            val isHeadphone = _currentDeviceType.value in setOf(
+                AudioDeviceType.WIRED, AudioDeviceType.BLUETOOTH, AudioDeviceType.USB
+            )
+            val requestedMode = if (isHeadphone) Virtualizer.VIRTUALIZATION_MODE_BINAURAL
+            else Virtualizer.VIRTUALIZATION_MODE_AUTO
+            if (Build.VERSION.SDK_INT >= 29 && session.appliedVirtMode != requestedMode) {
                 runCatching { virt.forceVirtualizationMode(requestedMode) }
-                if (!virt.enabled) virt.setEnabled(true)
+                    .onFailure { AuraLog.d(area, "Virtualization mode $requestedMode refused: ${it.message}") }
+                session.appliedVirtMode = requestedMode
+            }
+            if (session.appliedVirtEnabled != true) {
+                virt.enabled = true
+                session.appliedVirtEnabled = true
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Unable to enable 3D effect on session ${session.sessionId}", e)
+            AuraLog.w(area, "Unable to update 3D effect on session ${session.sessionId}", e)
         }
     }
 
-    /** Keep global slider state separate from explicit per-app override. */
+    private fun applyBassToSession(session: SessionEffects, strength: Int) {
+        val bb = session.bassBoost ?: return
+        try {
+            if (session.appliedBass != strength) {
+                if (bb.strengthSupported) bb.setStrength(strength.toShort())
+                session.appliedBass = strength
+            }
+            val want = isEnabled && strength > 0
+            if (session.appliedBassEnabled != want) {
+                bb.enabled = want
+                session.appliedBassEnabled = want
+            }
+        } catch (e: Exception) {
+            AuraLog.w(area, "Unable to change bass on session ${session.sessionId}", e)
+        }
+    }
+
     private fun applyGainsWithTreble() {
         val totalBands = _hardwareBands.value.size.coerceAtLeast(bandGains.size)
         val updated = (0 until totalBands).mapNotNull { i ->
             _hardwareBands.value.getOrNull(i)?.let { existing ->
                 val baseGain = bandGains.getOrNull(i)?.toInt() ?: 0
-                existing.copy(currentGainMilliBel = baseGain.coerceIn(
-                    existing.minMilliBel.toInt(), existing.maxMilliBel.toInt()
-                ).toShort())
+                existing.copy(
+                    currentGainMilliBel = baseGain.coerceIn(
+                        existing.minMilliBel.toInt(), existing.maxMilliBel.toInt()
+                    ).toShort()
+                )
             }
         }
         if (updated.isNotEmpty()) _hardwareBands.value = updated
-        // Per-app overrides are calculated independently; no global slider can
-        // overwrite an explicit app preset.
-        activeEffectSessions.values.forEach { session ->
-            if (presetForSession(session.sessionId) == null) applyEqualizer(session, null)
-        }
+        activeEffectSessions.values.forEach(::applyCurrentParametersToSession)
     }
 
     private fun applyCurrentParametersToSession(session: SessionEffects) {
-        val preset = presetForSession(session.sessionId)
-        applyEqualizer(session, preset)
-        applyBassBoost(session, (preset?.bassBoost ?: bassBoostStrength.toInt()).coerceIn(0, 1000).toShort())
-        applyVirtualizationToSession(
-            session, (preset?.virtualizer ?: virtualizerStrength.toInt()).coerceIn(0, 1000).toShort()
-        )
+        try {
+            val appPreset = presetForSession(session.sessionId)
+            val currentGains = appPreset?.gains ?: bandGains.map { it.toInt() }
+            val currentTreble = appPreset?.treble ?: trebleValue
+            val currentBass = (appPreset?.bassBoost ?: bassBoostStrength.toInt()).coerceIn(0, 1000)
+            val currentVirtualizer = (appPreset?.virtualizer ?: virtualizerStrength.toInt()).coerceIn(0, 1000)
+
+            session.equalizer?.let { eq -> applyEqualizer(session, eq, currentGains, currentTreble) }
+            applyBassToSession(session, currentBass)
+            applyVirtualizationToSession(session, currentVirtualizer)
+        } catch (e: Exception) {
+            AuraLog.w(area, "Error applying parameters to session ${session.sessionId}", e)
+        }
     }
 
-    private fun applyEqualizer(session: SessionEffects, preset: EqualizerPreset?) {
-        val eq = session.equalizer ?: return
-        try {
-            if (!eq.hasControl()) return
-            val numBands = eq.numberOfBands.toInt()
-            val range = eq.bandLevelRange
-            for (i in 0 until numBands) {
-                val gain = if (preset == null) bandGains.getOrNull(i)?.toInt() ?: 0
-                else preset.gains.getOrNull(i) ?: 0
-                val effective = EqBandTuning.effectiveGain(
-                    gain, preset?.treble ?: trebleValue, i, numBands,
-                    range[0].toInt(), range[1].toInt()
-                )
-                eq.setBandLevel(i.toShort(), effective)
+    /** Writes only the bands whose target changed since the last apply. */
+    private fun applyEqualizer(session: SessionEffects, eq: Equalizer, gains: List<Int>, treble: Int) {
+        val numBands = eq.numberOfBands.toInt()
+        val minGain = _capabilities.value.minGainMilliBel.toInt()
+        val maxGain = _capabilities.value.maxGainMilliBel.toInt()
+        val target = IntArray(numBands) { i ->
+            EqBandTuning.effectiveGain(
+                gains.getOrNull(i) ?: 0, treble, i, numBands, minGain, maxGain
+            ).toInt()
+        }
+        val previous = session.appliedBands?.takeIf { it.size == numBands }
+        for (i in 0 until numBands) {
+            if (previous?.get(i) != target[i]) {
+                eq.setBandLevel(i.toShort(), target[i].toShort())
             }
-            if (eq.enabled != isEnabled) eq.setEnabled(isEnabled)
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "Unable to apply EQ on session ${session.sessionId}", e)
+        }
+        session.appliedBands = target
+        if (session.appliedEqEnabled != isEnabled) {
+            eq.enabled = isEnabled
+            session.appliedEqEnabled = isEnabled
         }
     }
 
@@ -570,13 +576,16 @@ class AudioEffectManager(private val context: Context) {
             }
         }
 
+        if (_currentDeviceType.value != detectedType) {
+            AuraLog.i(area, "Output route: $detectedType ($detectedName)")
+        }
         _currentDeviceType.value = detectedType
         _currentDeviceName.value = detectedName
     }
 
     @Synchronized
     fun release() {
-        this.isEnabled = false
+        isEnabled = false
         knownSessionPackages.clear()
         bandGains.clear()
         bassBoostStrength = 0
@@ -584,10 +593,20 @@ class AudioEffectManager(private val context: Context) {
         virtualizerStrength = 0
         try {
             audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
         activeEffectSessions.values.forEach { it.release() }
         activeEffectSessions.clear()
         _activeSessions.value = emptySet()
         _controlledPackages.value = emptySet()
+        AuraLog.i(area, "Effects released")
     }
+
+    private fun defaultBands() = listOf(
+        EqualizerBand(0, 60, -1500, 1500, 0),
+        EqualizerBand(1, 230, -1500, 1500, 0),
+        EqualizerBand(2, 910, -1500, 1500, 0),
+        EqualizerBand(3, 3600, -1500, 1500, 0),
+        EqualizerBand(4, 14000, -1500, 1500, 0)
+    )
 }

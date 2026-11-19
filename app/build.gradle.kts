@@ -105,6 +105,8 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer)
   implementation(libs.androidx.media3.common)
   implementation(libs.androidx.media3.session)
+  // Explicit: PlaybackNotificationProvider uses Guava ImmutableList from the Media3 API.
+  implementation("com.google.guava:guava:33.3.1-android")
   implementation(libs.androidx.documentfile)
   // Genuine sampled-backdrop refraction/blur for the floating glass navigation bar.
   implementation("dev.chrisbanes.haze:haze:2.0.1")

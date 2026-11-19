@@ -2,7 +2,6 @@ package com.example.playback
 
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import com.example.audio.SpatialSettings
 import com.example.data.model.Track
 import kotlinx.coroutines.flow.StateFlow
@@ -11,38 +10,43 @@ class PlaybackRepository(private val context: Context) {
 
     val playbackState: StateFlow<PlaybackState> = AuraMediaSessionService.playbackState
 
+    val playbackPosition: StateFlow<PlaybackPosition> = AuraMediaSessionService.playbackPosition
+
+    private fun ensureServiceRunning(): AuraMediaSessionService? {
+        val existing = AuraMediaSessionService.instance
+        if (existing != null) return existing
+
+        val intent = Intent(context, AuraMediaSessionService::class.java)
+        // Media3 promotes the session service to foreground after playback begins.
+        // Starting it as FGS before preparation triggers Android's startup timeout.
+        // MediaSessionService promotes itself when ExoPlayer actually starts playback.
+        // startForegroundService() here causes ForegroundServiceDidNotStartInTimeException
+        // while the service is still preparing a playlist/media session.
+        context.startService(intent)
+        return AuraMediaSessionService.instance
+    }
+
     fun playTrack(track: Track, queue: List<Track>) {
-        val index = queue.indexOfFirst { it.uriString == track.uriString }
-        val shuffle = playbackState.value.isShuffleEnabled
-        if (index >= 0) startPlayback(queue, index, shuffle)
-        else startPlayback(listOf(track), 0, shuffle)
+        val startIndex = queue.indexOfFirst { it.uriString == track.uriString }.coerceAtLeast(0)
+        playAll(queue.ifEmpty { listOf(track) }, startIndex)
     }
 
     fun playAll(tracks: List<Track>, startIndex: Int = 0) {
-        startPlayback(tracks, startIndex, shuffle = false)
+        if (tracks.isEmpty()) return
+        val service = AuraMediaSessionService.instance
+        if (service != null) {
+            service.playAll(tracks, startIndex)
+        } else {
+            AuraMediaSessionService.pendingPlayback = tracks to startIndex
+            ensureServiceRunning()
+        }
     }
 
     fun shuffleAll(tracks: List<Track>) {
         if (tracks.isEmpty()) return
-        startPlayback(tracks, tracks.indices.random(), shuffle = true)
-    }
-
-    private fun startPlayback(tracks: List<Track>, index: Int, shuffle: Boolean) {
-        if (tracks.isEmpty()) return
-        val service = AuraMediaSessionService.instance
-        if (service != null) {
-            service.playAll(tracks, index, shuffle)
-            return
-        }
-
-        AuraMediaSessionService.pendingPlayback =
-            AuraMediaSessionService.PlaybackRequest(tracks.toList(), index, shuffle)
-        try {
-            context.startService(Intent(context, AuraMediaSessionService::class.java))
-        } catch (e: IllegalStateException) {
-            AuraMediaSessionService.pendingPlayback = null
-            Log.e("AuraPlayback", "Could not start the media session from the current app state", e)
-        }
+        val shuffled = tracks.shuffled()
+        playAll(shuffled, 0)
+        AuraMediaSessionService.instance?.toggleShuffle()
     }
 
     fun playNext(track: Track) {
@@ -66,7 +70,8 @@ class PlaybackRepository(private val context: Context) {
     }
 
     fun togglePlayPause() {
-        AuraMediaSessionService.instance?.togglePlayPause()
+        val service = ensureServiceRunning()
+        service?.togglePlayPause()
     }
 
     fun seekTo(positionMs: Long) {
@@ -87,14 +92,6 @@ class PlaybackRepository(private val context: Context) {
 
     fun toggleShuffle() {
         AuraMediaSessionService.instance?.toggleShuffle()
-    }
-
-    fun setEffectsEnabled(enabled: Boolean) {
-        AuraMediaSessionService.instance?.setEffectsEnabled(enabled)
-    }
-
-    fun updateSurroundStrength(strength: Int) {
-        AuraMediaSessionService.instance?.updateSurroundStrength(strength)
     }
 
     fun updateSpatialSettings(settings: SpatialSettings) {
